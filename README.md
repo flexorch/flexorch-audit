@@ -34,6 +34,8 @@ clean = mask(text, result["pii"], strategy="redact")
 pip install flexorch-audit
 ```
 
+![demo](assets/demo.svg)
+
 ## Locale support
 
 | `locale` | Active detectors |
