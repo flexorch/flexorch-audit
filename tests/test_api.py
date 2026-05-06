@@ -73,3 +73,48 @@ def test_mask_strategies_all_remove_pii():
     for strategy in ("redact", "replace", "token", "hash"):
         clean = mask(text, result["pii"], strategy=strategy)
         assert "ali@example.com" not in clean, f"PII still present with strategy={strategy}"
+
+
+# ── New fields: quality_grade, quality_score, pii_summary ────────────────────
+
+def test_audit_quality_grade_present():
+    result = audit("Hello world", locale="tr")
+    assert result["quality_grade"] in ("A", "B", "C", "D")
+
+
+def test_audit_quality_score_range():
+    result = audit("Hello world", locale="tr")
+    assert 0.0 <= result["quality_score"] <= 1.0
+
+
+def test_audit_empty_text_grade_d():
+    result = audit("")
+    assert result["quality_grade"] == "D"
+    assert result["quality_score"] == 0.0
+
+
+def test_audit_long_clean_text_grade_a():
+    result = audit("a" * 600)
+    assert result["quality_grade"] == "A"
+    assert result["quality_score"] >= 0.85
+
+
+def test_audit_pii_summary_aggregates_by_type():
+    result = audit("Email: a@b.com, c@d.com", locale="tr")
+    assert isinstance(result["pii_summary"], list)
+    email_entry = next((s for s in result["pii_summary"] if s["type"] == "email"), None)
+    assert email_entry is not None
+    assert email_entry["count"] == 2
+
+
+def test_audit_pii_summary_empty_when_no_pii():
+    result = audit("Clean text with no personal data.")
+    assert result["pii_summary"] == []
+
+
+def test_audit_result_attribute_access():
+    result = audit("test text", locale="tr")
+    assert result.quality_grade == result["quality_grade"]
+    assert result.quality_score == result["quality_score"]
+    assert result.pii == result["pii"]
+    assert result.pii_summary == result["pii_summary"]
