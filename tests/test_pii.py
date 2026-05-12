@@ -1,5 +1,5 @@
 import pytest
-from flexorch_audit._pii import detect_pii, _valid_tckn, _luhn
+from flexorch_audit._pii import detect_pii, _valid_tckn, _luhn, _valid_vkn, _valid_iban
 
 
 # ── TCKN checksum ─────────────────────────────────────────────────────────────
@@ -189,3 +189,140 @@ def test_findings_sorted_by_position():
 def test_empty_string_returns_empty():
     assert detect_pii("", locale="tr") == []
     assert detect_pii("   ", locale="tr") == []
+
+
+# ── VKN ───────────────────────────────────────────────────────────────────────
+
+
+def test_valid_vkn():
+    assert _valid_vkn("1234567890") is True
+    assert _valid_vkn("9876543217") is True
+
+
+def test_invalid_vkn_checksum():
+    assert _valid_vkn("1234567891") is False
+
+
+def test_invalid_vkn_leading_zero():
+    assert _valid_vkn("0123456789") is False
+
+
+def test_invalid_vkn_non_numeric():
+    assert _valid_vkn("123456789X") is False
+
+
+def test_vkn_detected_tr_locale():
+    findings = detect_pii("VKN: 1234567890", locale="tr")
+    assert any(f["type"] == "tax_id_tr" and f["value"] == "1234567890" for f in findings)
+
+
+def test_invalid_vkn_not_detected():
+    findings = detect_pii("VKN: 1234567891", locale="tr")
+    assert not any(f["type"] == "tax_id_tr" for f in findings)
+
+
+def test_vkn_not_detected_us_locale():
+    findings = detect_pii("VKN: 1234567890", locale="us")
+    assert not any(f["type"] == "tax_id_tr" for f in findings)
+
+
+def test_tckn_not_matched_as_vkn():
+    # 11-digit TCKN must not trigger 10-digit VKN match
+    findings = detect_pii("TC: 12345678950", locale="tr")
+    assert not any(f["type"] == "tax_id_tr" for f in findings)
+
+
+# ── IPv6 ──────────────────────────────────────────────────────────────────────
+
+
+def test_ipv6_full_detected():
+    findings = detect_pii("Server: 2001:0db8:85a3:0000:0000:8a2e:0370:7334", locale="tr")
+    assert any(f["type"] == "ip_v6" for f in findings)
+
+
+def test_ipv6_compressed_detected():
+    findings = detect_pii("Host: 2001:db8::1", locale="tr")
+    assert any(f["type"] == "ip_v6" and "2001:db8::1" in f["value"] for f in findings)
+
+
+def test_ipv6_loopback_detected():
+    findings = detect_pii("Loopback: ::1", locale="tr")
+    assert any(f["type"] == "ip_v6" for f in findings)
+
+
+def test_ipv6_not_detected_in_clean_text():
+    findings = detect_pii("Version 1:2 is available", locale="tr")
+    assert not any(f["type"] == "ip_v6" for f in findings)
+
+
+# ── IBAN mod-97 ───────────────────────────────────────────────────────────────
+
+
+def test_valid_iban_de():
+    assert _valid_iban("DE89370400440532013000") is True
+
+
+def test_valid_iban_tr():
+    assert _valid_iban("TR330006100519786457841326") is True
+
+
+def test_invalid_iban_checksum():
+    # Flip one digit — fails mod-97
+    assert _valid_iban("DE89370400440532013001") is False
+
+
+def test_invalid_iban_not_detected():
+    # Format matches regex but fails mod-97
+    findings = detect_pii("IBAN: DE89370400440532013001", locale="tr")
+    assert not any(f["type"] == "iban" for f in findings)
+
+
+# ── audit_batch ───────────────────────────────────────────────────────────────
+
+
+def test_audit_batch_empty():
+    from flexorch_audit import audit_batch
+    result = audit_batch([])
+    assert result["duplicate_ratio"] == 0.0
+    assert result["results"] == []
+
+
+def test_audit_batch_no_duplicates():
+    from flexorch_audit import audit_batch
+    texts = ["Hello world", "Different text", "Another one"]
+    result = audit_batch(texts)
+    assert result["duplicate_ratio"] == 0.0
+    assert len(result["results"]) == 3
+
+
+def test_audit_batch_with_duplicates():
+    from flexorch_audit import audit_batch
+    texts = ["Same text", "Same text", "Different"]
+    result = audit_batch(texts)
+    assert result["duplicate_ratio"] == pytest.approx(1 / 3, abs=0.001)
+
+
+def test_audit_batch_all_duplicates():
+    from flexorch_audit import audit_batch
+    texts = ["copy", "copy", "copy"]
+    result = audit_batch(texts)
+    assert result["duplicate_ratio"] == pytest.approx(2 / 3, abs=0.001)
+
+
+def test_audit_batch_pii_summary_aggregated():
+    from flexorch_audit import audit_batch
+    texts = [
+        "Email: a@b.com",
+        "Email: c@d.com and e@f.com",
+    ]
+    result = audit_batch(texts, locale="tr")
+    email_entry = next((x for x in result["pii_summary"] if x["type"] == "email"), None)
+    assert email_entry is not None
+    assert email_entry["count"] == 3
+
+
+def test_audit_batch_avg_quality_score():
+    from flexorch_audit import audit_batch
+    texts = ["", "Hello world " * 100]
+    result = audit_batch(texts)
+    assert 0.0 < result["avg_quality_score"] < 1.0

@@ -4,15 +4,12 @@ build-backend = "hatchling.build"
 
 [project]
 name = "flexorch-audit"
-version = "0.2.0"
+version = "0.3.0"
 description = "Zero-dependency PII + quality + noise audit for LLM datasets (TR/EU/US)"
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.10"
 dependencies = []
-
-[project.optional-dependencies]
-dev = ["pytest>=7"]
 keywords = ["pii", "privacy", "llm", "dataset", "audit", "tckn", "kvkk", "gdpr"]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -26,6 +23,9 @@ classifiers = [
     "Topic :: Text Processing",
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
 
 [project.urls]
 Homepage = "https://github.com/flexorch/flexorch-audit"

@@ -3,14 +3,14 @@
 Zero-dependency PII + quality + noise audit for LLM datasets. Answers one question: **is this dataset ready for LLM training?**
 
 - **Quality grade** — A/B/C/D score that signals LLM-readiness at a glance
-- **PII detection** — email, phone (TR + E.164), credit card (Luhn), IP, TCKN, IBAN, SSN, label-prefixed names
+- **PII detection** — email, phone (TR + E.164), credit card (Luhn), IPv4/IPv6, TCKN, VKN, IBAN (mod-97), SSN, label-prefixed names
 - **Quality metrics** — completeness, average length, duplicate ratio
 - **Noise metrics** — garbage character ratio, encoding health
 - **Masking** — redact / replace / token / hash strategies
 - **Zero runtime dependencies** — pure Python stdlib, Python 3.10+
 
 ```python
-from flexorch_audit import audit, mask
+from flexorch_audit import audit, audit_batch, mask
 
 text = open("contract.txt").read()  # extract from PDF/DOCX first
 result = audit(text, locale="tr")
@@ -40,9 +40,9 @@ pip install flexorch-audit
 
 | `locale` | Active detectors |
 |----------|-----------------|
-| `"tr"` (default) | email, iban, credit_card, ip + TCKN, phone_tr, name |
-| `"us"` | email, iban, credit_card, ip + SSN, E.164 phone |
-| `"eu"` | email, iban, credit_card, ip + E.164 phone |
+| `"tr"` (default) | email, iban, credit_card, ip, ip_v6 + TCKN, VKN, phone_tr, name |
+| `"us"` | email, iban, credit_card, ip, ip_v6 + SSN, E.164 phone |
+| `"eu"` | email, iban, credit_card, ip, ip_v6 + E.164 phone |
 | `"all"` | All of the above (phone_tr takes precedence over generic phone) |
 
 ## PII types
@@ -50,14 +50,32 @@ pip install flexorch-audit
 | Type | Description | Locale |
 |------|-------------|--------|
 | `email` | RFC-5321 address | all |
-| `iban` | ISO 13616 IBAN (any country) | all |
+| `iban` | ISO 13616 IBAN — mod-97 checksum validated | all |
 | `credit_card` | 16-digit groups, Luhn-validated | all |
 | `ip` | IPv4 address | all |
+| `ip_v6` | IPv6 address (full, compressed, loopback) | all |
 | `phone_tr` | Turkish mobile (+90/0 prefix + 10 digits) | tr |
 | `national_id_tr` | TCKN — 11-digit modular arithmetic checksum | tr |
+| `tax_id_tr` | VKN — 10-digit Luhn-variant checksum | tr |
 | `name` | Label-prefixed name (e.g. "Adı: Ali Yıldız", "Full Name: Jane Doe") | tr |
 | `phone` | E.164 international phone | us, eu |
 | `ssn` | US Social Security Number (###-##-####) | us |
+
+## Batch audit
+
+Use `audit_batch()` to audit a list of texts and get aggregate metrics including `duplicate_ratio`:
+
+```python
+from flexorch_audit import audit_batch
+
+texts = [record["text"] for record in dataset]
+batch = audit_batch(texts, locale="tr")
+
+batch["duplicate_ratio"]    # 0.12  — fraction of exact-duplicate records
+batch["avg_quality_score"]  # 0.78
+batch["pii_summary"]        # [{"type": "email", "count": 47}, ...]
+batch["results"]            # list of AuditResult, one per text
+```
 
 ## Masking strategies
 
@@ -82,25 +100,10 @@ The `quality_grade` (A–D) and `quality_score` (0.0–1.0) are composite signal
 Score formula: `completeness × (0.4 × noise_score + 0.4 × length_score + 0.2)`
 where `length_score = min(char_count / 500, 1.0)` and `noise_score = max(0, 1 − garbage_ratio × 10)`.
 
-## Quality & noise
-
-`duplicate_ratio` is `null` for single-string input. To compute it across a dataset:
-
-```python
-texts = [record["text"] for record in dataset]
-results = [audit(t) for t in texts]
-
-seen = set()
-duplicates = sum(1 for t in texts if t in seen or seen.add(t))
-duplicate_ratio = duplicates / len(texts)
-```
-
-## Limitations (v0.1)
+## Limitations (v0.4)
 
 - Free-standing name detection (without a label prefix) requires NLP/NER — not included.
-- `duplicate_ratio` is per-call; aggregate across your dataset manually (see above).
-- IPv6 not detected.
-- IBAN format-only check; mod-97 validation not performed.
+- `replace` masking strategy uses static synthetic values; per-type realistic synthesis (e.g. locale-aware fake names) is not yet implemented.
 
 ## License
 

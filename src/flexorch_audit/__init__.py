@@ -25,8 +25,8 @@ from ._quality import quality_metrics
 from ._noise import noise_metrics
 from ._mask import apply_mask
 
-__version__ = "0.2.0"
-__all__ = ["audit", "mask", "AuditResult", "__version__"]
+__version__ = "0.3.0"
+__all__ = ["audit", "audit_batch", "mask", "AuditResult", "__version__"]
 
 
 class AuditResult(dict):
@@ -112,6 +112,55 @@ def audit(text: str, locale: str = "tr") -> AuditResult:
         quality=quality,
         noise=noise,
     )
+
+
+def audit_batch(texts: list[str], locale: str = "tr") -> dict:
+    """
+    Audit a list of texts and aggregate metrics — including duplicate_ratio.
+
+    Args:
+        texts:  List of raw texts to analyse.
+        locale: Same locale selector as audit().
+
+    Returns:
+        results           — list[AuditResult], one per input text
+        duplicate_ratio   — fraction of texts that are exact duplicates
+        pii_summary       — aggregated PII counts across all texts
+        avg_quality_score — mean quality_score across all texts
+    """
+    if not texts:
+        return {
+            "results": [],
+            "duplicate_ratio": 0.0,
+            "pii_summary": [],
+            "avg_quality_score": 0.0,
+        }
+
+    results = [audit(t, locale=locale) for t in texts]
+
+    seen: set[str] = set()
+    dup_count = 0
+    for t in texts:
+        if t in seen:
+            dup_count += 1
+        else:
+            seen.add(t)
+    dup_ratio = round(dup_count / len(texts), 4)
+
+    all_pii: list[dict] = []
+    for r in results:
+        all_pii.extend(r["pii"])
+    counts = Counter(f["type"] for f in all_pii)
+    pii_summary = [{"type": t, "count": c} for t, c in sorted(counts.items())]
+
+    avg_score = round(sum(r.quality_score for r in results) / len(results), 4)
+
+    return {
+        "results": results,
+        "duplicate_ratio": dup_ratio,
+        "pii_summary": pii_summary,
+        "avg_quality_score": avg_score,
+    }
 
 
 def mask(text: str, findings: list[dict], strategy: str = "redact") -> str:
