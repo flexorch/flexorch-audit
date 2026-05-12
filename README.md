@@ -105,6 +105,12 @@ where `length_score = min(char_count / 500, 1.0)` and `noise_score = max(0, 1 âˆ
 - Free-standing name detection (without a label prefix) requires NLP/NER â€” not included.
 - `replace` masking strategy uses static synthetic values; per-type realistic synthesis (e.g. locale-aware fake names) is not yet implemented.
 
+## Also available for JavaScript / TypeScript
+
+```bash
+npm install @flexorch/audit
+```
+
 ## License
 
 MIT
