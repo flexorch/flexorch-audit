@@ -1,5 +1,8 @@
 import pytest
-from flexorch_audit._pii import detect_pii, _valid_tckn, _luhn, _valid_vkn, _valid_iban
+from flexorch_audit._pii import (
+    detect_pii, _valid_tckn, _luhn, _valid_vkn, _valid_iban,
+    _valid_iban_intl, _valid_phone_intl, _valid_vkn,
+)
 
 
 # ── TCKN checksum ─────────────────────────────────────────────────────────────
@@ -96,13 +99,43 @@ def test_tckn_not_in_us_locale():
 
 
 def test_iban_tr_detected():
+    # locale="tr" → iban_tr type (replaces generic iban for TR locale)
     findings = detect_pii("IBAN: TR330006100519786457841326", locale="tr")
-    assert any(f["type"] == "iban" for f in findings)
+    assert any(f["type"] == "iban_tr" for f in findings)
 
 
-def test_iban_de_detected():
+def test_iban_tr_not_generic_iban():
+    # generic iban must not fire alongside iban_tr
+    findings = detect_pii("IBAN: TR330006100519786457841326", locale="tr")
+    assert not any(f["type"] == "iban" for f in findings)
+
+
+def test_iban_de_detected_tr_locale():
+    # German IBAN in TR locale: no iban_intl active → falls back to universal iban
     findings = detect_pii("Bank: DE89370400440532013000", locale="tr")
     assert any(f["type"] == "iban" for f in findings)
+
+
+def test_iban_de_detected_eu_locale():
+    # locale="eu" → iban_intl with country/length validation
+    findings = detect_pii("Bank: DE89370400440532013000", locale="eu")
+    assert any(f["type"] == "iban_intl" for f in findings)
+
+
+def test_iban_intl_no_generic_iban_eu():
+    # generic iban must not fire alongside iban_intl
+    findings = detect_pii("Bank: DE89370400440532013000", locale="eu")
+    assert not any(f["type"] == "iban" for f in findings)
+
+
+def test_iban_invalid_checksum_rejected():
+    findings = detect_pii("DE00370400440532013000", locale="eu")
+    assert not any(f["type"] == "iban_intl" for f in findings)
+
+
+def test_iban_unsupported_country_rejected():
+    findings = detect_pii("JP00XXXX0000000000000000", locale="eu")
+    assert not any(f["type"] == "iban_intl" for f in findings)
 
 
 # ── Credit card ───────────────────────────────────────────────────────────────
@@ -326,3 +359,172 @@ def test_audit_batch_avg_quality_score():
     texts = ["", "Hello world " * 100]
     result = audit_batch(texts)
     assert 0.0 < result["avg_quality_score"] < 1.0
+
+
+# ── phone_intl ────────────────────────────────────────────────────────────────
+
+
+def test_phone_intl_us_detected():
+    findings = detect_pii("Call: +1 (415) 555-2671", locale="us")
+    assert any(f["type"] == "phone_intl" and f["value"].startswith("+1") for f in findings)
+
+
+def test_phone_intl_uk_detected():
+    findings = detect_pii("Tel: +44 20 7946 0958", locale="eu")
+    assert any(f["type"] == "phone_intl" and f["value"].startswith("+44") for f in findings)
+
+
+def test_phone_intl_tr_excluded():
+    # +90 TR numbers must not appear as phone_intl in any locale
+    findings = detect_pii("+905321234567", locale="eu")
+    assert not any(f["type"] == "phone_intl" for f in findings)
+
+
+def test_phone_intl_too_short_rejected():
+    assert not any(f["type"] == "phone_intl" for f in detect_pii("+123456", locale="eu"))
+
+
+def test_phone_intl_not_in_tr_locale():
+    findings = detect_pii("Tel: +44 20 7946 0958", locale="tr")
+    assert not any(f["type"] == "phone_intl" for f in findings)
+
+
+def test_valid_phone_intl_helper():
+    assert _valid_phone_intl("+14155552671") is True
+    assert _valid_phone_intl("+905321234567") is False  # TR excluded
+    assert _valid_phone_intl("+123456") is False          # too short
+
+
+# ── company_name_tr ───────────────────────────────────────────────────────────
+
+
+def test_company_name_tr_as_detected():
+    findings = detect_pii("Tedarikçi: Arçelik A.Ş. fatura kesti.", locale="tr")
+    assert any(f["type"] == "company_name_tr" and "Arçelik" in f["value"] for f in findings)
+
+
+def test_company_name_tr_ltd_sti():
+    findings = detect_pii("Firma: Delta Yazılım Ltd. Şti. ile anlaşıldı.", locale="tr")
+    assert any(f["type"] == "company_name_tr" for f in findings)
+
+
+def test_company_name_tr_not_in_eu_locale():
+    findings = detect_pii("Firma: Arçelik A.Ş.", locale="eu")
+    assert not any(f["type"] == "company_name_tr" for f in findings)
+
+
+# ── mersis_no ─────────────────────────────────────────────────────────────────
+
+
+def test_mersis_detected():
+    findings = detect_pii("MERSİS: 1234567890123456", locale="tr")
+    assert any(f["type"] == "mersis_no" and f["value"] == "1234567890123456" for f in findings)
+
+
+def test_mersis_starts_with_zero_not_detected():
+    findings = detect_pii("0234567890123456", locale="tr")
+    assert not any(f["type"] == "mersis_no" for f in findings)
+
+
+def test_mersis_not_in_us_locale():
+    findings = detect_pii("MERSİS: 1234567890123456", locale="us")
+    assert not any(f["type"] == "mersis_no" for f in findings)
+
+
+# ── postal_code_tr ────────────────────────────────────────────────────────────
+
+
+def test_postal_code_tr_detected():
+    findings = detect_pii("Posta kodu: 34100 İstanbul", locale="tr")
+    assert any(f["type"] == "postal_code_tr" and f["value"] == "34100" for f in findings)
+
+
+def test_postal_code_tr_invalid_province_rejected():
+    # 99xxx — province plate 99 doesn't exist
+    findings = detect_pii("Kod: 99100", locale="tr")
+    assert not any(f["type"] == "postal_code_tr" for f in findings)
+
+
+# ── province_tr ───────────────────────────────────────────────────────────────
+
+
+def test_province_tr_detected():
+    findings = detect_pii("Şehir: İstanbul", locale="tr")
+    assert any(f["type"] == "province_tr" and f["value"] == "İstanbul" for f in findings)
+
+
+def test_province_tr_ankara():
+    findings = detect_pii("Ankara'da bir toplantı yapıldı.", locale="tr")
+    assert any(f["type"] == "province_tr" and f["value"] == "Ankara" for f in findings)
+
+
+def test_province_tr_not_in_eu_locale():
+    findings = detect_pii("City: İstanbul", locale="eu")
+    assert not any(f["type"] == "province_tr" for f in findings)
+
+
+# ── company_name_intl ─────────────────────────────────────────────────────────
+
+
+def test_company_name_intl_gmbh():
+    findings = detect_pii("Tedarikçi: Müller Elektronik GmbH fatura kesti.", locale="eu")
+    assert any(f["type"] == "company_name_intl" and "GmbH" in f["value"] for f in findings)
+
+
+def test_company_name_intl_llc():
+    findings = detect_pii("Vendor: Acme Solutions LLC", locale="us")
+    assert any(f["type"] == "company_name_intl" and "LLC" in f["value"] for f in findings)
+
+
+def test_company_name_intl_sas():
+    findings = detect_pii("Alıcı: Renault SAS sözleşmeyi imzaladı.", locale="eu")
+    assert any(f["type"] == "company_name_intl" and "SAS" in f["value"] for f in findings)
+
+
+def test_company_name_intl_lowercase_start_rejected():
+    findings = detect_pii("bu bir gmbh değildir.", locale="eu")
+    assert not any(f["type"] == "company_name_intl" for f in findings)
+
+
+def test_company_name_intl_not_in_tr_locale():
+    findings = detect_pii("Firma: Bosch GmbH ile anlaşma.", locale="tr")
+    assert not any(f["type"] == "company_name_intl" for f in findings)
+
+
+# ── iban_intl validators ──────────────────────────────────────────────────────
+
+
+def test_valid_iban_intl_de():
+    assert _valid_iban_intl("DE89370400440532013000") is True
+
+
+def test_valid_iban_intl_nl():
+    assert _valid_iban_intl("NL91ABNA0417164300") is True
+
+
+def test_valid_iban_intl_tr_excluded():
+    assert _valid_iban_intl("TR330006100519786457841326") is False
+
+
+def test_valid_iban_intl_wrong_length():
+    # DE should be 22 chars; 21 chars → rejected
+    assert _valid_iban_intl("DE89370400440532013") is False
+
+
+def test_valid_iban_intl_bad_checksum():
+    assert _valid_iban_intl("DE00370400440532013000") is False
+
+
+# ── locale="all" combined ─────────────────────────────────────────────────────
+
+
+def test_locale_all_tr_iban_as_iban_tr():
+    findings = detect_pii("TR330006100519786457841326", locale="all")
+    assert any(f["type"] == "iban_tr" for f in findings)
+    assert not any(f["type"] == "iban" for f in findings)
+
+
+def test_locale_all_de_iban_as_iban_intl():
+    findings = detect_pii("DE89370400440532013000", locale="all")
+    assert any(f["type"] == "iban_intl" for f in findings)
+    assert not any(f["type"] == "iban" for f in findings)

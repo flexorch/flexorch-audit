@@ -4,16 +4,15 @@ import re
 
 EMAIL_RE = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
 
-# E.164 international phone — requires + prefix, 10+ total digits
-# Used for locale=us/eu. TR phones covered by PHONE_TR_RE.
-PHONE_INTL_RE = re.compile(
-    r"\+\d{1,3}[\s\-\.]?\(?\d{1,4}\)?[\s\-\.]?\d{3,4}[\s\-\.]?\d{4}\b"
-)
+# E.164 international phone — requires + prefix, 7-15 total digits, TR (+90) excluded.
+# Validated by _valid_phone_intl(); type: "phone_intl" in eu/us locales.
+PHONE_INTL_RE = re.compile(r"(?<![+\d])(\+[1-9][\d\s\-\.\(\)]{5,18}\d)(?!\d)")
 
-# IBAN — ISO 13616 (all countries, including TR); mod-97 validated below
-IBAN_RE = re.compile(r"\b[A-Z]{2}\d{2}[0-9A-Z]{11,30}\b")
+# IBAN — ISO 13616 generic; mod-97 validated by _valid_iban().
+# Locale-specific sub-types (iban_tr, iban_intl) replace this in tr/eu locales.
+IBAN_RE = re.compile(r"\b([A-Z]{2}\d{2}[0-9A-Z]{11,30})\b")
 
-# Credit card — 16 digits with separator groups (Luhn-validated separately)
+# Credit card — 16 digits with separator groups (Luhn-validated)
 CC_RE = re.compile(r"\b\d{4}[ \-]\d{4}[ \-]\d{4}[ \-]\d{4}\b")
 
 # IPv4
@@ -26,10 +25,10 @@ _H = r"[0-9a-fA-F]{1,4}"
 IPV6_RE = re.compile(
     rf"(?<![:\.\w])"
     rf"(?:"
-    rf"(?:{_H}:){{7}}{_H}"                     # full 8 groups
-    rf"|(?:{_H}:){{1,7}}:"                      # trailing :: e.g. 2001:db8::
-    rf"|::(?:(?:{_H}:){{0,6}}{_H})?"            # leading :: e.g. ::1, ::ffff:...
-    rf"|(?:{_H}:){{1,6}}:{_H}"                  # one :: in middle
+    rf"(?:{_H}:){{7}}{_H}"
+    rf"|(?:{_H}:){{1,7}}:"
+    rf"|::(?:(?:{_H}:){{0,6}}{_H})?"
+    rf"|(?:{_H}:){{1,6}}:{_H}"
     rf"|(?:{_H}:){{1,5}}(?::{_H}){{1,2}}"
     rf"|(?:{_H}:){{1,4}}(?::{_H}){{1,3}}"
     rf"|(?:{_H}:){{1,3}}(?::{_H}){{1,4}}"
@@ -45,12 +44,64 @@ IPV6_RE = re.compile(
 # Turkish mobile: +90 5xx... or 0 5xx... or bare 5xx (10 digits)
 PHONE_TR_RE = re.compile(r"\b(?:\+90|0)?\s*5\d{2}\s*\d{3}\s*\d{2}\s*\d{2}\b")
 
-# TCKN — first digit non-zero, 11 digits, checksum-validated below
+# TCKN — first digit non-zero, 11 digits, checksum-validated
 TCKN_RE = re.compile(r"\b([1-9]\d{10})\b")
 
 # VKN (Vergi Kimlik Numarası) — 10 digits, first non-zero, Luhn-variant checksum
 VKN_RE = re.compile(r"\b([1-9]\d{9})\b")
 
+# Turkish IBAN — TR + 2 check + 22 BBAN digits/chars (total 26)
+IBAN_TR_RE = re.compile(r"\bTR\d{2}[0-9A-Z]{22}\b")
+
+# Turkish company suffixes
+_TR_COMPANY_SUFFIX = r"(?:A\.Ş\.|Ltd\.\s*Şti\.|Koll\.\s*Şti\.|Koop\.|T\.A\.Ş\.)"
+# Middle tokens: connector OR capitalised word (including optional trailing dot for abbreviations)
+_TR_NAME_TOKEN = r"(?:ve|ile|[A-ZÇĞİÖŞÜ][A-Za-zÇĞİÖŞÜçğışöşü]*\.?)"
+COMPANY_NAME_TR_RE = re.compile(
+    r"(?<![A-Za-zÇĞİÖŞÜçğışöşü])"
+    r"("
+    r"[A-ZÇĞİÖŞÜ][A-Za-zÇĞİÖŞÜçğışöşü]*"
+    r"(?:\s+" + _TR_NAME_TOKEN + r"){0,6}"
+    r"\s+" + _TR_COMPANY_SUFFIX + r")",
+    re.UNICODE,
+)
+
+# MERSIS — Turkish company registry number, 16 digits, first digit non-zero
+MERSIS_RE = re.compile(r"\b([1-9]\d{15})\b")
+
+# Turkish postal codes: first 2 digits = province plate (01–81)
+POSTAL_CODE_TR_RE = re.compile(r"\b((?:0[1-9]|[1-7]\d|80|81)\d{3})\b")
+
+_TR_PROVINCES = [
+    "Afyonkarahisar", "Kahramanmaraş", "Kırıkkale", "Kırklareli",
+    "Diyarbakır", "Gaziantep", "Şanlıurfa", "Nevşehir",
+    "Kastamonu", "Gümüşhane", "Eskişehir", "Erzincan",
+    "Erzurum", "Denizli", "Çanakkale", "Adıyaman",
+    "Zonguldak", "Tekirdağ", "Trabzon", "Tunceli",
+    "Karaman", "Karabük", "Aksaray", "Antalya",
+    "Kırşehir", "Osmaniye", "Kocaeli", "Sakarya",
+    "Bartın", "Bayburt", "Ardahan", "Yozgat",
+    "Ankara", "Amasya", "Artvin", "Balıkesir",
+    "Bilecik", "Bingöl", "Bitlis", "Burdur",
+    "Çankırı", "Edirne", "Elazığ", "Giresun",
+    "Hakkari", "Isparta", "İstanbul", "İzmir",
+    "Kayseri", "Kütahya", "Malatya", "Manisa",
+    "Mardin", "Samsun", "Şırnak", "Sinop",
+    "Tokat", "Hatay", "Konya", "Muğla",
+    "Niğde", "Rize", "Siirt", "Sivas",
+    "Adana", "Aydın", "Bursa", "Çorum",
+    "Iğdır", "Kilis", "Mersin", "Batman",
+    "Yalova", "Düzce", "Ordu", "Kars",
+    "Ağrı", "Bolu", "Van", "Uşak", "Muş",
+]
+# Longest names first — prevents partial matches (e.g. "Kastamonu" before "Kars")
+_TR_PROVINCES_SORTED = sorted(_TR_PROVINCES, key=len, reverse=True)
+PROVINCE_TR_RE = re.compile(
+    r"\b(" + "|".join(re.escape(p) for p in _TR_PROVINCES_SORTED) + r")\b",
+    re.UNICODE,
+)
+
+# Label-prefixed name detection (TR and EN labels)
 _NAME_PREFIX_TR = (
     r"(?:Ad[ıi]\s*(?:Soyad[ıi])?|Soyad[ıi]|İsim|"
     r"Müşteri\s+Ad[ıi]|Yetkili(?:\s+Kişi)?|Çalışan\s+Ad[ıi]|"
@@ -63,24 +114,55 @@ _NAME_PREFIX_EN = (
     r"(?<!\bUser\s)Name)"
 )
 _NAME_VALUE = r"([A-ZÇĞİÖŞÜ][a-zçğışöşü]+(?:\s+[A-ZÇĞİÖŞÜ][a-zçğışöşü]+){0,2})"
-
-# Label-prefixed name detection (TR and EN labels). NLP-based free-standing name
-# detection is out of scope for v0.1 — requires NER.
 NAME_RE = re.compile(
     rf"(?:{_NAME_PREFIX_TR}|{_NAME_PREFIX_EN})\s*[:\-]\s*{_NAME_VALUE}",
     re.UNICODE,
 )
 
+# ── EU / International detectors ─────────────────────────────────────────────
+
+# International IBAN — ISO 13616 country/length table, TR excluded.
+# Country codes: EU member states + GB, CH, NO.
+_IBAN_INTL_LENGTHS: dict[str, int] = {
+    "AT": 20, "BE": 16, "BG": 22, "HR": 21, "CY": 28, "CZ": 24,
+    "DK": 18, "EE": 20, "FI": 18, "FR": 27, "DE": 22, "GR": 27,
+    "HU": 28, "IE": 22, "IT": 27, "LV": 21, "LT": 20, "LU": 20,
+    "MT": 31, "NL": 18, "PL": 28, "PT": 25, "RO": 24, "SK": 24,
+    "SI": 19, "ES": 24, "SE": 24, "GB": 22, "CH": 21, "NO": 15,
+}
+IBAN_INTL_RE = re.compile(r"\b([A-Z]{2}\d{2}[0-9A-Z]{11,30})\b")
+
+# International company suffixes — longer patterns listed first to prevent partial matches.
+# Latin Extended range (U+00C0–U+024F) covers German/French/Italian umlauts and accents.
+_INTL_SUFFIX = (
+    r"(?:KGaA|GmbH|OHG|GbR|SARL|EURL"
+    r"|S\.p\.A\.|S\.r\.l\.|S\.n\.c\.|S\.a\.s\."
+    r"|B\.V\.|N\.V\.|S\.A\.|S\.L\."
+    r"|Corp\.|Inc\.|Ltd\.|LLP|LLC|PLC"
+    r"|SpA|Srl|SNC|SAS|BV|NV|SL|SA"
+    r"|Corp|Inc|Ltd|KG|AG|UG)"
+)
+_UC = r"[A-ZÀ-ɏ]"
+_WC = r"[A-Za-z0-9À-ɏ\-]"
+_INTL_NAME_TOKEN = rf"(?:and|&|{_UC}{_WC}*\.?)"
+COMPANY_NAME_INTL_RE = re.compile(
+    rf"(?<![A-Za-zÀ-ɏ])"
+    rf"({_UC}{_WC}*"
+    r"(?:\s+" + _INTL_NAME_TOKEN + r"){0,6}"
+    r"\s+" + _INTL_SUFFIX + r")",
+    re.UNICODE,
+)
+
 # ── US detectors ─────────────────────────────────────────────────────────────
 
-# SSN — hyphens required to minimise false positives
+# SSN — hyphens required to reduce false positives
 SSN_RE = re.compile(r"\b(?!000|666|9\d{2})\d{3}-(?!00)\d{2}-(?!0000)\d{4}\b")
 
 # ── Validation helpers ────────────────────────────────────────────────────────
 
 
 def _valid_tckn(s: str) -> bool:
-    # TR Nüfus Müdürlüğü modular arithmetic — same as Luhn-family checksums
+    """TR Nüfus Müdürlüğü modular arithmetic checksum."""
     if len(s) != 11 or s[0] == "0":
         return False
     d = [int(c) for c in s]
@@ -92,7 +174,7 @@ def _valid_tckn(s: str) -> bool:
 
 
 def _luhn(number: str) -> bool:
-    # ISO/IEC 7812 Luhn checksum
+    """ISO/IEC 7812 Luhn checksum."""
     digits = [int(c) for c in number if c.isdigit()]
     if not 13 <= len(digits) <= 19:
         return False
@@ -107,7 +189,7 @@ def _luhn(number: str) -> bool:
 
 
 def _valid_vkn(s: str) -> bool:
-    # VKN Luhn-variant: weighted sum of first 9 digits, mod-9 reduction, check 10th
+    """VKN Luhn-variant: weighted sum of first 9 digits, mod-9 reduction, checks 10th digit."""
     if len(s) != 10 or not s.isdigit() or s[0] == "0":
         return False
     d = [int(c) for c in s]
@@ -125,7 +207,7 @@ def _valid_vkn(s: str) -> bool:
 
 
 def _valid_iban(s: str) -> bool:
-    # ISO 7064 mod-97 IBAN checksum
+    """ISO 7064 mod-97 IBAN checksum (all countries)."""
     rearranged = s[4:] + s[:4]
     numeric = "".join(str(ord(c) - 55) if c.isalpha() else c for c in rearranged.upper())
     try:
@@ -134,12 +216,31 @@ def _valid_iban(s: str) -> bool:
         return False
 
 
+def _valid_iban_intl(s: str) -> bool:
+    """ISO 13616: country existence, exact length, and mod-97 checksum. Excludes TR."""
+    country = s[:2]
+    if country == "TR" or country not in _IBAN_INTL_LENGTHS:
+        return False
+    if len(s) != _IBAN_INTL_LENGTHS[country]:
+        return False
+    return _valid_iban(s)
+
+
+def _valid_phone_intl(raw: str) -> bool:
+    """E.164: 7-15 total digits, excludes TR country code (+90)."""
+    digits = re.sub(r"\D", "", raw)
+    return 7 <= len(digits) <= 15 and digits[:2] != "90"
+
+
 # ── Locale registry ───────────────────────────────────────────────────────────
 
 _LOCALE_DETECTORS: dict[str, set[str]] = {
-    "tr": {"national_id_tr", "tax_id_tr", "phone_tr", "name"},
-    "us": {"ssn", "phone"},
-    "eu": {"phone"},
+    "tr": {
+        "national_id_tr", "tax_id_tr", "phone_tr", "name",
+        "iban_tr", "company_name_tr", "mersis_no", "postal_code_tr", "province_tr",
+    },
+    "us": {"ssn", "phone_intl", "company_name_intl"},
+    "eu": {"phone_intl", "iban_intl", "company_name_intl"},
 }
 _UNIVERSAL: set[str] = {"email", "iban", "credit_card", "ip", "ip_v6"}
 
@@ -149,9 +250,6 @@ def _active(locale: str) -> set[str]:
         active: set[str] = set(_UNIVERSAL)
         for detectors in _LOCALE_DETECTORS.values():
             active |= detectors
-        # phone_tr is more specific than generic phone; skip generic when both active
-        if "phone_tr" in active:
-            active.discard("phone")
         return active
     return _UNIVERSAL | _LOCALE_DETECTORS.get(locale, set())
 
@@ -161,9 +259,18 @@ def _active(locale: str) -> set[str]:
 
 def detect_pii(text: str, locale: str = "tr") -> list[dict]:
     """
-    Detect PII in *text* and return a list of findings sorted by position.
+    Detect PII in *text* and return findings sorted by position.
 
     Each finding: {"type": str, "value": str, "start": int, "end": int}
+
+    Locale selectors:
+        "tr"  — Turkish: TCKN, VKN, phone_tr, name, iban_tr, company_name_tr,
+                mersis_no, postal_code_tr, province_tr  (default)
+        "us"  — US: SSN, phone_intl, company_name_intl
+        "eu"  — EU: phone_intl, iban_intl, company_name_intl
+        "all" — All detectors combined
+        Universal (always active unless overridden): email, iban*, credit_card, ip, ip_v6
+        * iban suppressed when iban_tr or iban_intl is active to avoid duplicates.
     """
     active = _active(locale)
     findings: list[dict] = []
@@ -173,15 +280,16 @@ def detect_pii(text: str, locale: str = "tr") -> list[dict]:
         for m in EMAIL_RE.finditer(t):
             findings.append({"type": "email", "value": m.group(), "start": m.start(), "end": m.end()})
 
-    if "phone" in active:
+    if "phone_intl" in active:
         for m in PHONE_INTL_RE.finditer(t):
-            if sum(c.isdigit() for c in m.group()) >= 10:
-                findings.append({"type": "phone", "value": m.group(), "start": m.start(), "end": m.end()})
+            candidate = m.group(1)
+            if _valid_phone_intl(candidate):
+                findings.append({"type": "phone_intl", "value": candidate, "start": m.start(1), "end": m.end(1)})
 
     if "iban" in active:
         for m in IBAN_RE.finditer(t):
-            if _valid_iban(m.group()):
-                findings.append({"type": "iban", "value": m.group(), "start": m.start(), "end": m.end()})
+            if _valid_iban(m.group(1)):
+                findings.append({"type": "iban", "value": m.group(1), "start": m.start(1), "end": m.end(1)})
 
     if "credit_card" in active:
         for m in CC_RE.finditer(t):
@@ -216,9 +324,52 @@ def detect_pii(text: str, locale: str = "tr") -> list[dict]:
             idx = m.lastindex
             findings.append({"type": "name", "value": m.group(idx), "start": m.start(idx), "end": m.end(idx)})
 
+    if "iban_tr" in active:
+        for m in IBAN_TR_RE.finditer(t):
+            if _valid_iban(m.group()):
+                findings.append({"type": "iban_tr", "value": m.group(), "start": m.start(), "end": m.end()})
+
+    if "company_name_tr" in active:
+        for m in COMPANY_NAME_TR_RE.finditer(t):
+            findings.append({"type": "company_name_tr", "value": m.group(1), "start": m.start(1), "end": m.end(1)})
+
+    if "mersis_no" in active:
+        for m in MERSIS_RE.finditer(t):
+            findings.append({"type": "mersis_no", "value": m.group(1), "start": m.start(1), "end": m.end(1)})
+
+    if "postal_code_tr" in active:
+        for m in POSTAL_CODE_TR_RE.finditer(t):
+            findings.append({"type": "postal_code_tr", "value": m.group(1), "start": m.start(1), "end": m.end(1)})
+
+    if "province_tr" in active:
+        for m in PROVINCE_TR_RE.finditer(t):
+            findings.append({"type": "province_tr", "value": m.group(1), "start": m.start(1), "end": m.end(1)})
+
     if "ssn" in active:
         for m in SSN_RE.finditer(t):
             findings.append({"type": "ssn", "value": m.group(), "start": m.start(), "end": m.end()})
 
+    if "iban_intl" in active:
+        for m in IBAN_INTL_RE.finditer(t):
+            candidate = m.group(1)
+            if _valid_iban_intl(candidate):
+                findings.append({"type": "iban_intl", "value": candidate, "start": m.start(1), "end": m.end(1)})
+
+    if "company_name_intl" in active:
+        for m in COMPANY_NAME_INTL_RE.finditer(t):
+            findings.append({"type": "company_name_intl", "value": m.group(1), "start": m.start(1), "end": m.end(1)})
+
     findings.sort(key=lambda x: x["start"])
+
+    # Dedup: where a specific iban_tr or iban_intl covers the same span as a
+    # generic iban finding, drop the generic one to avoid duplicate entries.
+    specific_iban_spans = {
+        (f["start"], f["end"]) for f in findings if f["type"] in ("iban_tr", "iban_intl")
+    }
+    if specific_iban_spans:
+        findings = [
+            f for f in findings
+            if not (f["type"] == "iban" and (f["start"], f["end"]) in specific_iban_spans)
+        ]
+
     return findings

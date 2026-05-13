@@ -25,7 +25,7 @@ from ._quality import quality_metrics
 from ._noise import noise_metrics
 from ._mask import apply_mask
 
-__version__ = "0.3.1"
+__version__ = "0.4.0"
 __all__ = ["audit", "audit_batch", "mask", "AuditResult", "__version__"]
 
 
@@ -75,11 +75,13 @@ def audit(text: str, locale: str = "tr") -> AuditResult:
     Args:
         text:   Raw text to analyse.
         locale: Which locale-specific detectors to activate.
-                "tr"  — Turkish: TCKN, phone_tr, name  (default)
-                "us"  — US: SSN, E.164 phone
-                "eu"  — EU: E.164 phone
-                "all" — All detectors (phone_tr takes precedence over generic phone)
-                Universal detectors (email, iban, credit_card, ip) are always active.
+                "tr"  — Turkish: TCKN, VKN, phone_tr, name, iban_tr,
+                        company_name_tr, mersis_no, postal_code_tr, province_tr  (default)
+                "us"  — US: SSN, phone_intl, company_name_intl
+                "eu"  — EU: phone_intl, iban_intl, company_name_intl
+                "all" — All detectors combined
+                Universal (always active): email, iban*, credit_card, ip, ip_v6
+                * iban is suppressed per-span when iban_tr or iban_intl fires.
 
     Returns:
         AuditResult (dict subclass) with:
