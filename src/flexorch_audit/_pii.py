@@ -157,6 +157,52 @@ COMPANY_NAME_INTL_RE = re.compile(
 
 # SSN — hyphens required to reduce false positives
 SSN_RE = re.compile(r"\b(?!000|666|9\d{2})\d{3}-(?!00)\d{2}-(?!0000)\d{4}\b")
+# EIN — employer identification: XX-XXXXXXX
+EIN_US_RE = re.compile(r"\b(\d{2}-\d{7})\b")
+# ITIN — individual TIN: 9XX-7X/8X/9X-XXXX
+ITIN_US_RE = re.compile(r"\b(9\d{2}-(?:7[0-9]|8[0-8]|9[0-24-9])-\d{4})\b")
+
+# ── DE detectors ──────────────────────────────────────────────────────────────
+STEUER_ID_DE_RE = re.compile(r"\b([1-9]\d{10})\b")
+SVNR_DE_RE = re.compile(r"\b(\d{4}[01]\d[0-3]\d[A-Z]\d{4})\b")
+
+# ── FR detectors ──────────────────────────────────────────────────────────────
+SIRET_FR_RE = re.compile(
+    r"(?:SIRET|N°\s*SIRET|Num[eé]ro\s+SIRET|RCS)\s*[:#]*\s*(\d{14})\b",
+    re.IGNORECASE,
+)
+SIREN_FR_RE = re.compile(
+    r"(?:SIREN|N°\s*SIREN|Num[eé]ro\s+SIREN)\s*[:#]*\s*(\d{9})\b",
+    re.IGNORECASE,
+)
+INSEE_FR_RE = re.compile(r"\b([12]\d{14})\b")
+
+# ── IT detectors ──────────────────────────────────────────────────────────────
+CODICE_FISCALE_IT_RE = re.compile(
+    r"\b([A-Z]{6}\d{2}[A-Z]\d{2}[A-Z]\d{3}[A-Z])\b",
+    re.IGNORECASE,
+)
+PARTITA_IVA_IT_RE = re.compile(r"\b(\d{11})\b")
+
+# ── NL detectors ──────────────────────────────────────────────────────────────
+BSN_NL_RE = re.compile(r"\b(\d{9})\b")
+KVK_NL_RE = re.compile(
+    r"(?:KVK|KvK|Handelsregister(?:nummer)?)\s*[:#]*\s*(\d{8})\b",
+    re.IGNORECASE,
+)
+
+# ── ES detectors ──────────────────────────────────────────────────────────────
+_DNI_LETTER_TABLE = "TRWAGMYFPDXBNJZSQVHLCKE"
+DNI_ES_RE = re.compile(r"\b(\d{8}[A-Z])\b")
+NIE_ES_RE = re.compile(r"\b([XYZ]\d{7}[A-Z])\b")
+CIF_ES_RE = re.compile(r"\b([ABCDEFGHJKLMNPQRSUVW]\d{7}[0-9A-J])\b")
+
+# ── UK detectors ──────────────────────────────────────────────────────────────
+NI_UK_RE = re.compile(r"\b([A-CEGHJ-PR-TW-Z][A-CEGHJ-NPR-TW-Z]\d{6}[ABCD])\b")
+UTR_UK_RE = re.compile(
+    r"(?:UTR|Unique\s+Taxpayer(?:\s+Reference)?)\s*[:#]*\s*(\d{10})\b",
+    re.IGNORECASE,
+)
 
 # ── Validation helpers ────────────────────────────────────────────────────────
 
@@ -232,6 +278,77 @@ def _valid_phone_intl(raw: str) -> bool:
     return 7 <= len(digits) <= 15 and digits[:2] != "90"
 
 
+def _valid_steuer_id_de(s: str) -> bool:
+    """ISO 7064 MOD 11,2 variant for German Steueridentifikationsnummer."""
+    if len(s) != 11 or s[0] == "0":
+        return False
+    product = 10
+    for i in range(10):
+        total = (int(s[i]) + product) % 10
+        if total == 0:
+            total = 10
+        product = (total * 2) % 11
+    check = 11 - product
+    if check == 10:
+        check = 0
+    return check == int(s[10])
+
+
+def _valid_partita_iva_it(s: str) -> bool:
+    """Italian Partita IVA checksum (Agenzia delle Entrate algorithm)."""
+    if len(s) != 11 or not s.isdigit():
+        return False
+    odd_sum = sum(int(s[i]) for i in range(0, 10, 2))
+    even_sum = 0
+    for i in range(1, 10, 2):
+        v = int(s[i]) * 2
+        even_sum += v if v < 10 else v - 9
+    return (10 - (odd_sum + even_sum) % 10) % 10 == int(s[10])
+
+
+def _valid_bsn_nl(s: str) -> bool:
+    """Dutch BSN 11-check: weighted sum (weights 9..2, -1) mod 11 == 0."""
+    if len(s) != 9 or not s.isdigit():
+        return False
+    d = [int(c) for c in s]
+    total = sum((9 - i) * d[i] for i in range(8)) - d[8]
+    return total > 0 and total % 11 == 0
+
+
+def _valid_dni_es(s: str) -> bool:
+    """Spanish DNI: 8 digits + control letter = DNI_LETTER_TABLE[number % 23]."""
+    if len(s) != 9 or not s[:8].isdigit():
+        return False
+    return _DNI_LETTER_TABLE[int(s[:8]) % 23] == s[8]
+
+
+def _valid_nie_es(s: str) -> bool:
+    """Spanish NIE: X/Y/Z prefix → 0/1/2 substitution, then DNI letter check."""
+    if len(s) != 9 or s[0] not in "XYZ":
+        return False
+    prefix = {"X": "0", "Y": "1", "Z": "2"}[s[0]]
+    return _DNI_LETTER_TABLE[int(prefix + s[1:8]) % 23] == s[8]
+
+
+_NI_UK_FORBIDDEN = frozenset({"BG", "GB", "KN", "NK", "NT", "TN", "ZZ"})
+
+
+def _valid_ni_uk(s: str) -> bool:
+    """UK NI: reject HMRC-defined forbidden two-letter prefixes."""
+    return s[:2].upper() not in _NI_UK_FORBIDDEN
+
+
+_EIN_INVALID_PREFIXES = frozenset({
+    "00", "07", "08", "09", "17", "18", "19", "28", "29",
+    "49", "69", "70", "78", "79", "89", "96", "97",
+})
+
+
+def _valid_ein_us(s: str) -> bool:
+    """US EIN: reject IRS-defined invalid area prefixes."""
+    return s[:2] not in _EIN_INVALID_PREFIXES
+
+
 # ── Locale registry ───────────────────────────────────────────────────────────
 
 _LOCALE_DETECTORS: dict[str, set[str]] = {
@@ -239,14 +356,20 @@ _LOCALE_DETECTORS: dict[str, set[str]] = {
         "national_id_tr", "tax_id_tr", "phone_tr", "name",
         "iban_tr", "company_name_tr", "mersis_no", "postal_code_tr", "province_tr",
     },
-    "us": {"ssn", "phone_intl", "company_name_intl"},
+    "us": {"ssn", "tax_id_us", "national_id_us", "phone_intl", "company_name_intl"},
     "eu": {"phone_intl", "iban_intl", "company_name_intl"},
+    "de": {"tax_id_de", "social_id_de"},
+    "fr": {"siret_fr", "company_id_fr", "social_id_fr"},
+    "it": {"national_id_it", "tax_id_it"},
+    "nl": {"national_id_nl", "company_id_nl"},
+    "es": {"national_id_es", "tax_id_es"},
+    "uk": {"social_id_uk", "tax_id_uk"},
 }
 _UNIVERSAL: set[str] = {"email", "iban", "credit_card", "ip", "ip_v6"}
 
 
 def _active(locale: str) -> set[str]:
-    if locale == "all":
+    if locale in ("all", "und"):
         active: set[str] = set(_UNIVERSAL)
         for detectors in _LOCALE_DETECTORS.values():
             active |= detectors
@@ -257,20 +380,22 @@ def _active(locale: str) -> set[str]:
 # ── Public detector ───────────────────────────────────────────────────────────
 
 
-def detect_pii(text: str, locale: str = "tr") -> list[dict]:
+def detect_pii(text: str, locale: str = "und") -> list[dict]:
     """
     Detect PII in *text* and return findings sorted by position.
 
     Each finding: {"type": str, "value": str, "start": int, "end": int}
 
     Locale selectors:
+        "und" — All detectors combined (default; use when language is unknown)
+        "all" — Alias for "und"
         "tr"  — Turkish: TCKN, VKN, phone_tr, name, iban_tr, company_name_tr,
-                mersis_no, postal_code_tr, province_tr  (default)
+                mersis_no, postal_code_tr, province_tr
         "us"  — US: SSN, phone_intl, company_name_intl
         "eu"  — EU: phone_intl, iban_intl, company_name_intl
-        "all" — All detectors combined
-        Universal (always active unless overridden): email, iban*, credit_card, ip, ip_v6
-        * iban suppressed when iban_tr or iban_intl is active to avoid duplicates.
+        "de" / "fr" / "it" / "nl" / "es" / "uk" — country-specific detectors
+        Universal (always active): email, iban*, credit_card, ip, ip_v6
+        * iban suppressed per-span when iban_tr or iban_intl fires.
     """
     active = _active(locale)
     findings: list[dict] = []
@@ -348,6 +473,75 @@ def detect_pii(text: str, locale: str = "tr") -> list[dict]:
     if "ssn" in active:
         for m in SSN_RE.finditer(t):
             findings.append({"type": "ssn", "value": m.group(), "start": m.start(), "end": m.end()})
+
+    if "tax_id_us" in active:
+        for m in EIN_US_RE.finditer(t):
+            if _valid_ein_us(m.group(1)):
+                findings.append({"type": "tax_id_us", "value": m.group(1), "start": m.start(1), "end": m.end(1)})
+
+    if "national_id_us" in active:
+        for m in ITIN_US_RE.finditer(t):
+            findings.append({"type": "national_id_us", "value": m.group(1), "start": m.start(1), "end": m.end(1)})
+
+    if "tax_id_de" in active:
+        for m in STEUER_ID_DE_RE.finditer(t):
+            if _valid_steuer_id_de(m.group(1)):
+                findings.append({"type": "tax_id_de", "value": m.group(1), "start": m.start(1), "end": m.end(1)})
+
+    if "social_id_de" in active:
+        for m in SVNR_DE_RE.finditer(t):
+            findings.append({"type": "social_id_de", "value": m.group(1), "start": m.start(1), "end": m.end(1)})
+
+    if "siret_fr" in active:
+        for m in SIRET_FR_RE.finditer(t):
+            findings.append({"type": "siret_fr", "value": m.group(1), "start": m.start(1), "end": m.end(1)})
+
+    if "company_id_fr" in active:
+        for m in SIREN_FR_RE.finditer(t):
+            findings.append({"type": "company_id_fr", "value": m.group(1), "start": m.start(1), "end": m.end(1)})
+
+    if "social_id_fr" in active:
+        for m in INSEE_FR_RE.finditer(t):
+            findings.append({"type": "social_id_fr", "value": m.group(1), "start": m.start(1), "end": m.end(1)})
+
+    if "national_id_it" in active:
+        for m in CODICE_FISCALE_IT_RE.finditer(t):
+            findings.append({"type": "national_id_it", "value": m.group(1).upper(), "start": m.start(1), "end": m.end(1)})
+
+    if "tax_id_it" in active:
+        for m in PARTITA_IVA_IT_RE.finditer(t):
+            if _valid_partita_iva_it(m.group(1)):
+                findings.append({"type": "tax_id_it", "value": m.group(1), "start": m.start(1), "end": m.end(1)})
+
+    if "national_id_nl" in active:
+        for m in BSN_NL_RE.finditer(t):
+            if _valid_bsn_nl(m.group(1)):
+                findings.append({"type": "national_id_nl", "value": m.group(1), "start": m.start(1), "end": m.end(1)})
+
+    if "company_id_nl" in active:
+        for m in KVK_NL_RE.finditer(t):
+            findings.append({"type": "company_id_nl", "value": m.group(1), "start": m.start(1), "end": m.end(1)})
+
+    if "national_id_es" in active:
+        for m in DNI_ES_RE.finditer(t):
+            if _valid_dni_es(m.group(1)):
+                findings.append({"type": "national_id_es", "value": m.group(1), "start": m.start(1), "end": m.end(1)})
+        for m in NIE_ES_RE.finditer(t):
+            if _valid_nie_es(m.group(1)):
+                findings.append({"type": "national_id_es", "value": m.group(1), "start": m.start(1), "end": m.end(1)})
+
+    if "tax_id_es" in active:
+        for m in CIF_ES_RE.finditer(t):
+            findings.append({"type": "tax_id_es", "value": m.group(1), "start": m.start(1), "end": m.end(1)})
+
+    if "social_id_uk" in active:
+        for m in NI_UK_RE.finditer(t):
+            if _valid_ni_uk(m.group(1)):
+                findings.append({"type": "social_id_uk", "value": m.group(1), "start": m.start(1), "end": m.end(1)})
+
+    if "tax_id_uk" in active:
+        for m in UTR_UK_RE.finditer(t):
+            findings.append({"type": "tax_id_uk", "value": m.group(1), "start": m.start(1), "end": m.end(1)})
 
     if "iban_intl" in active:
         for m in IBAN_INTL_RE.finditer(t):

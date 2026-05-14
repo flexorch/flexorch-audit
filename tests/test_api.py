@@ -118,3 +118,49 @@ def test_audit_result_attribute_access():
     assert result.quality_score == result["quality_score"]
     assert result.pii == result["pii"]
     assert result.pii_summary == result["pii_summary"]
+
+
+# ── New v0.5.0 fields: noise_ratio, detected_language, "und" locale ──────────
+
+def test_audit_noise_ratio_field_present():
+    result = audit("clean text\nmore text")
+    assert "noise_ratio" in result
+    assert isinstance(result["noise_ratio"], float)
+    assert 0.0 <= result["noise_ratio"] <= 1.0
+
+
+def test_audit_noise_ratio_attribute_access():
+    result = audit("clean text")
+    assert result.noise_ratio == result["noise_ratio"]
+
+
+def test_audit_noise_ratio_noisy_text():
+    noisy = "clean\n@@@symbol noise\n\nclean"
+    result = audit(noisy)
+    assert result.noise_ratio > 0.0
+
+
+def test_audit_detected_language_field():
+    result = audit("some text", locale="tr")
+    assert result["detected_language"] == "tr"
+
+
+def test_audit_detected_language_und_default():
+    result = audit("some text")
+    assert result["detected_language"] == "und"
+
+
+def test_audit_locale_und_activates_all_detectors():
+    text = "TC: 12345678950, SSN: 123-45-6789, email: x@y.com"
+    result = audit(text, locale="und")
+    types = {f["type"] for f in result["pii"]}
+    assert "national_id_tr" in types
+    assert "ssn" in types
+    assert "email" in types
+
+
+def test_audit_default_locale_is_und():
+    text = "TC: 12345678950, SSN: 123-45-6789"
+    result_und = audit(text, locale="und")
+    result_default = audit(text)
+    assert result_und["pii"] == result_default["pii"]
