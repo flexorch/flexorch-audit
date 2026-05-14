@@ -28,7 +28,7 @@ from ._quality import quality_metrics
 from ._noise import noise_metrics, noise_ratio as _noise_ratio
 from ._mask import apply_mask
 
-__version__ = "0.5.0"
+__version__ = "0.5.1"
 __all__ = ["audit", "audit_batch", "mask", "AuditResult", "__version__"]
 
 
