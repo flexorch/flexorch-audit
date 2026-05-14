@@ -98,7 +98,6 @@ continues to fire for countries not covered by a locale-specific detector
 ### Other
 
 - README rewritten: shields.io badges, "Why" section, locale table
-- Limitations section updated with v0.4 targets
 
 ---
 
