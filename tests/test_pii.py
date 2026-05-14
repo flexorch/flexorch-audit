@@ -528,3 +528,174 @@ def test_locale_all_de_iban_as_iban_intl():
     findings = detect_pii("DE89370400440532013000", locale="all")
     assert any(f["type"] == "iban_intl" for f in findings)
     assert not any(f["type"] == "iban" for f in findings)
+
+
+# ── S2.1 DE ───────────────────────────────────────────────────────────────────
+from flexorch_audit._pii import (
+    _valid_steuer_id_de, _valid_partita_iva_it, _valid_bsn_nl,
+    _valid_dni_es, _valid_nie_es, _valid_ni_uk, _valid_ein_us,
+)
+
+
+def test_steuer_id_de_valid():
+    assert _valid_steuer_id_de("47036892816") is True
+
+
+def test_steuer_id_de_invalid_checksum():
+    assert _valid_steuer_id_de("47036892815") is False
+
+
+def test_steuer_id_de_leading_zero_rejected():
+    assert _valid_steuer_id_de("04703689281") is False
+
+
+def test_tax_id_de_detected():
+    findings = detect_pii("IdNr 47036892816", locale="de")
+    assert any(f["type"] == "tax_id_de" and f["value"] == "47036892816" for f in findings)
+
+
+def test_tax_id_de_not_in_tr_locale():
+    findings = detect_pii("47036892816", locale="tr")
+    assert not any(f["type"] == "tax_id_de" for f in findings)
+
+
+def test_social_id_de_detected():
+    findings = detect_pii("SV-Nr 12800101A0001", locale="de")
+    assert any(f["type"] == "social_id_de" and f["value"] == "12800101A0001" for f in findings)
+
+
+# ── S2.2 FR ───────────────────────────────────────────────────────────────────
+
+
+def test_siret_fr_detected():
+    findings = detect_pii("SIRET: 12345678901234", locale="fr")
+    assert any(f["type"] == "siret_fr" and f["value"] == "12345678901234" for f in findings)
+
+
+def test_siren_fr_detected():
+    findings = detect_pii("SIREN: 123456789", locale="fr")
+    assert any(f["type"] == "company_id_fr" and f["value"] == "123456789" for f in findings)
+
+
+def test_insee_fr_detected():
+    findings = detect_pii("NIR: 195127512345678", locale="fr")
+    assert any(f["type"] == "social_id_fr" and f["value"] == "195127512345678" for f in findings)
+
+
+def test_insee_fr_starts_with_3_not_detected():
+    findings = detect_pii("395127512345678", locale="fr")
+    assert not any(f["type"] == "social_id_fr" for f in findings)
+
+
+# ── S2.3 IT ───────────────────────────────────────────────────────────────────
+
+
+def test_partita_iva_valid():
+    assert _valid_partita_iva_it("12345678903") is True
+
+
+def test_partita_iva_wrong_checksum():
+    assert _valid_partita_iva_it("12345678900") is False
+
+
+def test_codice_fiscale_detected():
+    findings = detect_pii("CF: RSSMRA85M01H501Z", locale="it")
+    assert any(f["type"] == "national_id_it" and f["value"] == "RSSMRA85M01H501Z" for f in findings)
+
+
+def test_partita_iva_detected():
+    findings = detect_pii("P.IVA 12345678903", locale="it")
+    assert any(f["type"] == "tax_id_it" and f["value"] == "12345678903" for f in findings)
+
+
+# ── S2.4 NL ───────────────────────────────────────────────────────────────────
+
+
+def test_bsn_nl_valid():
+    assert _valid_bsn_nl("123456782") is True
+
+
+def test_bsn_nl_invalid():
+    assert _valid_bsn_nl("123456780") is False
+
+
+def test_bsn_nl_detected():
+    findings = detect_pii("BSN: 123456782", locale="nl")
+    assert any(f["type"] == "national_id_nl" and f["value"] == "123456782" for f in findings)
+
+
+def test_kvk_nl_detected():
+    findings = detect_pii("KvK: 12345678", locale="nl")
+    assert any(f["type"] == "company_id_nl" and f["value"] == "12345678" for f in findings)
+
+
+# ── S2.5 ES ───────────────────────────────────────────────────────────────────
+
+
+def test_dni_es_valid():
+    assert _valid_dni_es("12345678Z") is True
+
+
+def test_dni_es_invalid_letter():
+    assert _valid_dni_es("12345678A") is False
+
+
+def test_nie_es_valid():
+    assert _valid_nie_es("X1234567L") is True
+
+
+def test_dni_detected():
+    findings = detect_pii("DNI: 12345678Z", locale="es")
+    assert any(f["type"] == "national_id_es" and f["value"] == "12345678Z" for f in findings)
+
+
+def test_cif_detected():
+    findings = detect_pii("CIF: B12345674", locale="es")
+    assert any(f["type"] == "tax_id_es" and f["value"] == "B12345674" for f in findings)
+
+
+# ── S2.6 UK ───────────────────────────────────────────────────────────────────
+
+
+def test_ni_uk_valid():
+    assert _valid_ni_uk("AB123456A") is True
+
+
+def test_ni_uk_forbidden():
+    assert _valid_ni_uk("BG123456A") is False
+
+
+def test_ni_uk_detected():
+    findings = detect_pii("NI: AB123456A", locale="uk")
+    assert any(f["type"] == "social_id_uk" and f["value"] == "AB123456A" for f in findings)
+
+
+def test_utr_detected():
+    findings = detect_pii("UTR: 1234567890", locale="uk")
+    assert any(f["type"] == "tax_id_uk" and f["value"] == "1234567890" for f in findings)
+
+
+# ── S2.7 US ───────────────────────────────────────────────────────────────────
+
+
+def test_ein_us_valid():
+    assert _valid_ein_us("12-3456789") is True
+
+
+def test_ein_us_invalid_prefix():
+    assert _valid_ein_us("00-1234567") is False
+
+
+def test_ein_detected():
+    findings = detect_pii("EIN: 12-3456789", locale="us")
+    assert any(f["type"] == "tax_id_us" and f["value"] == "12-3456789" for f in findings)
+
+
+def test_itin_detected():
+    findings = detect_pii("ITIN: 900-70-1234", locale="us")
+    assert any(f["type"] == "national_id_us" and f["value"] == "900-70-1234" for f in findings)
+
+
+def test_ssn_still_detected_in_us_locale():
+    findings = detect_pii("SSN: 555-12-1234", locale="us")
+    assert any(f["type"] == "ssn" for f in findings)

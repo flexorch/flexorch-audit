@@ -5,6 +5,37 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.5.0] — 2026-05-13
+
+### New fields in AuditResult
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `noise_ratio` | `float` | Fraction of lines that are blank or contain symbol noise (`[@#!~*=]{3+}`). Mirrors the FlexOrch pipeline quality-step threshold — values above 0.20 indicate a document likely to reduce extraction quality. |
+| `detected_language` | `str` | The `locale` value passed to `audit()`. Reflects caller-controlled language selection; auto-detection is intentionally out of scope (zero-dependency constraint — see LIMITATIONS). |
+
+### Changed defaults
+
+`audit()`, `audit_batch()`, and `detect_pii()` now default to `locale="und"` (undetermined)
+instead of `locale="tr"`. `"und"` activates **all** locale detectors — same as `"all"`,
+which remains a valid alias.
+
+**Why:** A global tool should scan for everything when the document language is unknown,
+not silently ignore non-TR PII. Passing a specific locale is still recommended for
+precision when the language is known.
+
+**Migration:** If you relied on the `"tr"`-only default, add `locale="tr"` explicitly:
+```python
+result = audit(text, locale="tr")   # unchanged behaviour
+result = audit(text)                # v0.5.0: now equivalent to locale="und"
+```
+
+### Tests
+
+177 tests (was 131). All passing, 0 warnings.
+
+---
+
 ## [0.4.0] — 2026-05-13
 
 ### New PII types
@@ -94,20 +125,14 @@ Initial release.
 
 ## Roadmap
 
-### [0.5.0] — Planned
+### [0.6.0] — Planned
 
 - **Free-standing name detection** (NLP/NER): label-prefix not required; requires
-  a lightweight multilingual NER model (xlm-roberta backbone, lazy-loaded)
+  a lightweight multilingual NER model (xlm-roberta backbone, lazy-loaded).
+  Currently out of scope due to zero-dependency policy — will be an optional extra.
 - **Synthetic replacement strategy**: `mask(..., strategy="replace")` substitutes
   real synthetic values instead of `[MASKED_X]` tokens
   (e.g. random valid TCKN, plausible name, realistic phone)
-
-### [0.6.0] — Planned
-
-- **EU country-specific PII**: national IDs for DE/FR/IT/NL/ES/PL, VAT numbers,
-  social insurance numbers
-- **e-invoice formats**: UBL TR 1.2, Peppol BIS, EDIFACT basic field extraction
-- **US PII expansion**: EIN (Employer ID), driver's license patterns, ZIP+4
 
 ### [0.7.0] — Planned
 

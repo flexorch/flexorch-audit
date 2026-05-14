@@ -4,11 +4,14 @@ flexorch-audit — zero-dependency PII + quality + noise audit for LLM datasets.
     from flexorch_audit import audit, mask
 
     text = open("contract.txt").read()
-    result = audit(text, locale="tr")
+    result = audit(text)               # locale defaults to "und" (all detectors)
+    result = audit(text, locale="tr")  # Turkish-only detectors
 
-    result.quality_grade   # "A"
-    result.quality_score   # 0.91
-    result.pii_summary     # [{"type": "national_id_tr", "count": 3}, ...]
+    result.quality_grade      # "A"
+    result.quality_score      # 0.91
+    result.noise_ratio        # 0.03  (line-level noise fraction)
+    result.detected_language  # "und" (locale passed in — caller controls language)
+    result.pii_summary        # [{"type": "national_id_tr", "count": 3}, ...]
 
     # Dict-style access also works (backwards compatible):
     result["pii"]          # [{type, value, start, end}, ...]
@@ -22,10 +25,10 @@ from collections import Counter
 
 from ._pii import detect_pii
 from ._quality import quality_metrics
-from ._noise import noise_metrics
+from ._noise import noise_metrics, noise_ratio as _noise_ratio
 from ._mask import apply_mask
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 __all__ = ["audit", "audit_batch", "mask", "AuditResult", "__version__"]
 
 
@@ -68,33 +71,38 @@ def _compute_quality_grade(score: float) -> str:
     return "D"
 
 
-def audit(text: str, locale: str = "tr") -> AuditResult:
+def audit(text: str, locale: str = "und") -> AuditResult:
     """
     Audit *text* for LLM dataset readiness.
 
     Args:
         text:   Raw text to analyse.
         locale: Which locale-specific detectors to activate.
+                "und" — All detectors combined (default; use when language is unknown)
+                "all" — Alias for "und"
                 "tr"  — Turkish: TCKN, VKN, phone_tr, name, iban_tr,
-                        company_name_tr, mersis_no, postal_code_tr, province_tr  (default)
+                        company_name_tr, mersis_no, postal_code_tr, province_tr
                 "us"  — US: SSN, phone_intl, company_name_intl
                 "eu"  — EU: phone_intl, iban_intl, company_name_intl
-                "all" — All detectors combined
+                "de" / "fr" / "it" / "nl" / "es" / "uk" — country-specific detectors
                 Universal (always active): email, iban*, credit_card, ip, ip_v6
                 * iban is suppressed per-span when iban_tr or iban_intl fires.
 
     Returns:
         AuditResult (dict subclass) with:
-            quality_grade  — "A" | "B" | "C" | "D" overall LLM-readiness grade
-            quality_score  — 0.0–1.0 composite score (completeness + length + noise)
-            pii_summary    — [{type, count}] PII findings aggregated by type
-            pii            — [{type, value, start, end}] raw findings sorted by position
-            quality        — {completeness, avg_length, duplicate_ratio}
-            noise          — {garbage_ratio, encoding_ok}
+            quality_grade     — "A" | "B" | "C" | "D" overall LLM-readiness grade
+            quality_score     — 0.0–1.0 composite score (completeness + length + noise)
+            pii_summary       — [{type, count}] PII findings aggregated by type
+            pii               — [{type, value, start, end}] raw findings sorted by position
+            quality           — {completeness, avg_length, duplicate_ratio}
+            noise             — {garbage_ratio, encoding_ok}
+            noise_ratio       — fraction of lines that are blank or contain symbol noise (>0.20 = low quality)
+            detected_language — the locale value passed in (caller is responsible for language detection)
     """
     pii = detect_pii(text, locale=locale)
     quality = quality_metrics(text)
     noise = noise_metrics(text)
+    nr = _noise_ratio(text)
 
     quality_score = _compute_quality_score(
         quality["completeness"],
@@ -113,10 +121,12 @@ def audit(text: str, locale: str = "tr") -> AuditResult:
         pii=pii,
         quality=quality,
         noise=noise,
+        noise_ratio=nr,
+        detected_language=locale,
     )
 
 
-def audit_batch(texts: list[str], locale: str = "tr") -> dict:
+def audit_batch(texts: list[str], locale: str = "und") -> dict:
     """
     Audit a list of texts and aggregate metrics — including duplicate_ratio.
 

@@ -1,5 +1,44 @@
-from flexorch_audit._noise import noise_metrics
+from flexorch_audit._noise import noise_metrics, noise_ratio
 
+
+# ── noise_ratio (line-based) ─────────────────────────────────────────────────
+
+def test_noise_ratio_empty():
+    assert noise_ratio("") == 0.0
+
+
+def test_noise_ratio_clean():
+    assert noise_ratio("Hello\nworld\nno noise here") == 0.0
+
+
+def test_noise_ratio_blank_lines():
+    text = "line1\n\n\nline4"  # 2 blank lines out of 4
+    assert noise_ratio(text) == 0.5
+
+
+def test_noise_ratio_symbol_noise():
+    text = "normal line\n@@@garbage\n===another\nclean"
+    # 2 noisy lines out of 4
+    assert noise_ratio(text) == 0.5
+
+
+def test_noise_ratio_below_threshold():
+    text = "\n".join(["clean line"] * 10)
+    assert noise_ratio(text) == 0.0
+
+
+def test_noise_ratio_above_threshold():
+    text = "\n".join(["@@@"] * 30 + ["clean"] * 10)
+    assert noise_ratio(text) == 0.75
+
+
+def test_noise_ratio_mixed():
+    # blank line + symbol line + clean line + clean line = 2 noisy out of 4 = 0.5
+    text = "\n@@@\nclean\nclean"
+    assert noise_ratio(text) == 0.5
+
+
+# ── noise_metrics (character-based) ─────────────────────────────────────────
 
 def test_clean_text():
     result = noise_metrics("Hello, world!")
