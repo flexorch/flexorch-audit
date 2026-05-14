@@ -1,7 +1,9 @@
 import pytest
 from flexorch_audit._pii import (
     detect_pii, _valid_tckn, _luhn, _valid_vkn, _valid_iban,
-    _valid_iban_intl, _valid_phone_intl, _valid_vkn,
+    _valid_iban_intl, _valid_phone_intl,
+    _valid_steuer_id_de, _valid_partita_iva_it, _valid_bsn_nl,
+    _valid_dni_es, _valid_nie_es, _valid_ni_uk, _valid_ein_us,
 )
 
 
@@ -530,12 +532,8 @@ def test_locale_all_de_iban_as_iban_intl():
     assert not any(f["type"] == "iban" for f in findings)
 
 
-# ── S2.1 DE ───────────────────────────────────────────────────────────────────
-from flexorch_audit._pii import (
-    _valid_steuer_id_de, _valid_partita_iva_it, _valid_bsn_nl,
-    _valid_dni_es, _valid_nie_es, _valid_ni_uk, _valid_ein_us,
-)
 
+# ── S2.1 DE ───────────────────────────────────────────────────────────────────
 
 def test_steuer_id_de_valid():
     assert _valid_steuer_id_de("47036892816") is True

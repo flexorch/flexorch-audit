@@ -2,7 +2,9 @@
 Generates assets/demo.svg — a terminal-style screenshot of the audit() demo.
 Run: python demo/generate_svg.py
 """
-import sys, os, textwrap
+import os
+import sys
+
 sys.stdout.reconfigure(encoding="utf-8")
 
 # ── Output lines (hardcoded from running demo.py) ────────────────────────────

@@ -6,9 +6,9 @@ Run:
 """
 import sys
 
-sys.stdout.reconfigure(encoding="utf-8")
-
 from flexorch_audit import audit, mask
+
+sys.stdout.reconfigure(encoding="utf-8")
 
 SAMPLE_TEXT = """
 Employment Agreement — Flexorch Technology

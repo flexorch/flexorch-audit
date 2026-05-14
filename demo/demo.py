@@ -1,7 +1,8 @@
 import sys
-sys.stdout.reconfigure(encoding="utf-8")
 
 from flexorch_audit import audit, mask
+
+sys.stdout.reconfigure(encoding="utf-8")
 
 TEXT = """\
 Contract #1042  —  Employment Agreement

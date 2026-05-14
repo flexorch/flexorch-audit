@@ -9,9 +9,9 @@ Run:
 """
 import sys
 
-sys.stdout.reconfigure(encoding="utf-8")
-
 from flexorch_audit import audit
+
+sys.stdout.reconfigure(encoding="utf-8")
 
 RECORDS = [
     "The transformer architecture introduced self-attention, enabling parallel processing "
