@@ -5,6 +5,18 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.5.1] — 2026-05-14
+
+### Fixed
+
+- Import order in `demo/` and `examples/` scripts (E402 — `sys.stdout.reconfigure` moved after imports)
+- Split `import sys, os, textwrap` in `demo/generate_svg.py` into separate lines (E401); removed unused `textwrap` import (F401)
+- Duplicate `_valid_vkn` import in `tests/test_pii.py` (F811)
+- Mid-file import block in `tests/test_pii.py` moved to module top (E402)
+- Forward version reference (`v0.4 targets`) removed from v0.3.1 CHANGELOG entry
+
+---
+
 ## [0.5.0] — 2026-05-13
 
 ### New fields in AuditResult
