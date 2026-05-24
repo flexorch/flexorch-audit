@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "flexorch-audit"
-version = "0.5.1"
+version = "0.6.0"
 description = "Zero-dependency PII + quality + noise audit for LLM datasets (TR/EU/US)"
 readme = "README.md"
 license = { text = "MIT" }
@@ -28,7 +28,7 @@ classifiers = [
 dev = ["pytest>=7"]
 
 [project.urls]
-Homepage = "https://github.com/flexorch/flexorch-audit"
+Homepage = "https://flexorch.com"
 Issues = "https://github.com/flexorch/flexorch-audit/issues"
 
 [tool.hatch.build.targets.wheel]

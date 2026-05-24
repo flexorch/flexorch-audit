@@ -164,3 +164,81 @@ def test_audit_default_locale_is_und():
     result_und = audit(text, locale="und")
     result_default = audit(text)
     assert result_und["pii"] == result_default["pii"]
+
+
+# ── audit_stream ──────────────────────────────────────────────────────────────
+
+import asyncio
+import pytest
+from flexorch_audit import audit_stream, compliance_report, audit
+
+
+async def _collect(texts, locale="und"):
+    results = []
+    async def gen():
+        for t in texts:
+            yield t
+    async for r in audit_stream(gen(), locale=locale):
+        results.append(r)
+    return results
+
+
+def test_audit_stream_yields_results():
+    texts = ["Hello world", "Contact: ali@example.com", "TCKN: 12345678950"]
+    results = asyncio.run(_collect(texts, locale="tr"))
+    assert len(results) == 3
+
+
+def test_audit_stream_empty():
+    results = asyncio.run(_collect([]))
+    assert results == []
+
+
+def test_audit_stream_result_has_grade():
+    results = asyncio.run(_collect(["sample text"]))
+    assert results[0].quality_grade in ("A", "B", "C", "D")
+
+
+def test_audit_stream_detects_pii():
+    results = asyncio.run(_collect(["Email: test@example.com"], locale="und"))
+    assert any(f["type"] == "email" for f in results[0]["pii"])
+
+
+# ── compliance_report ─────────────────────────────────────────────────────────
+
+
+def test_compliance_no_pii():
+    result = audit("The quick brown fox.", locale="tr")
+    report = compliance_report(result)
+    assert report["has_pii"] is False
+    assert report["risk_level"] == "none"
+    assert report["masking_required"] is False
+    assert len(report["recommendations"]) == 1
+
+
+def test_compliance_high_risk_tckn():
+    result = audit("TC: 12345678950", locale="tr")
+    report = compliance_report(result)
+    assert report["has_pii"] is True
+    assert report["risk_level"] == "high"
+    assert report["masking_required"] is True
+    assert "national_id_tr" in report["pii_types"]
+
+
+def test_compliance_medium_risk_email():
+    result = audit("Email: hello@example.com", locale="tr")
+    report = compliance_report(result)
+    assert report["risk_level"] == "medium"
+
+
+def test_compliance_recommendations_present():
+    result = audit("TC: 12345678950", locale="tr")
+    report = compliance_report(result)
+    assert isinstance(report["recommendations"], list)
+    assert len(report["recommendations"]) >= 1
+
+
+def test_compliance_pii_types_sorted():
+    result = audit("TC: 12345678950 email: x@y.com", locale="tr")
+    report = compliance_report(result)
+    assert report["pii_types"] == sorted(report["pii_types"])

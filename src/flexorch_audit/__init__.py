@@ -21,15 +21,19 @@ flexorch-audit — zero-dependency PII + quality + noise audit for LLM datasets.
     clean = mask(text, result["pii"], strategy="redact")
 """
 
+from __future__ import annotations
+
+import asyncio
 from collections import Counter
+from typing import AsyncGenerator, AsyncIterable
 
 from ._pii import detect_pii
 from ._quality import quality_metrics
 from ._noise import noise_metrics, noise_ratio as _noise_ratio
 from ._mask import apply_mask
 
-__version__ = "0.5.1"
-__all__ = ["audit", "audit_batch", "mask", "AuditResult", "__version__"]
+__version__ = "0.6.0"
+__all__ = ["audit", "audit_batch", "audit_stream", "mask", "compliance_report", "AuditResult", "__version__"]
 
 
 class AuditResult(dict):
@@ -188,3 +192,91 @@ def mask(text: str, findings: list[dict], strategy: str = "redact") -> str:
         Text with PII replaced according to *strategy*.
     """
     return apply_mask(text, findings, strategy)
+
+
+async def audit_stream(
+    texts: AsyncIterable[str],
+    locale: str = "und",
+) -> AsyncGenerator[AuditResult, None]:
+    """
+    Async generator that audits texts one at a time from an async iterable.
+
+    Yields one AuditResult per input text. Processing is sequential — for
+    CPU-bound parallelism use asyncio.to_thread() or a thread pool externally.
+
+    Args:
+        texts:  Async iterable of raw text strings (e.g. async file reader).
+        locale: Same locale selector as audit().
+
+    Example::
+
+        async def lines():
+            for line in open("data.txt"):
+                yield line
+
+        async for result in audit_stream(lines()):
+            print(result.quality_grade, result.pii_summary)
+    """
+    async for text in texts:
+        yield await asyncio.to_thread(audit, text, locale)
+
+
+_HIGH_RISK_TYPES = frozenset({
+    "national_id_tr", "ssn", "credit_card",
+    "national_id_pl", "national_id_be", "social_id_at",
+    "social_id_de", "social_id_uk", "national_id_it",
+    "national_id_nl", "national_id_es", "national_id_us",
+    "tax_id_tr", "tax_id_de",
+})
+
+_MEDIUM_RISK_TYPES = frozenset({
+    "email", "phone_tr", "phone_intl", "iban", "iban_tr", "iban_intl", "name",
+})
+
+
+def compliance_report(result: AuditResult) -> dict:
+    """
+    Generate a KVKK/GDPR compliance summary for an AuditResult.
+
+    This is a technical summary only — not a legal document or regulatory opinion.
+
+    Args:
+        result: AuditResult returned by audit().
+
+    Returns:
+        has_pii          — bool: True if any PII was detected
+        pii_types        — list[str]: unique PII types found, sorted
+        risk_level       — "none" | "low" | "medium" | "high"
+        masking_required — bool: True when has_pii
+        recommendations  — list[str]: actionable next steps
+    """
+    pii = result.get("pii", [])
+    types = sorted({f["type"] for f in pii})
+
+    if not types:
+        level = "none"
+    elif any(t in _HIGH_RISK_TYPES for t in types):
+        level = "high"
+    elif any(t in _MEDIUM_RISK_TYPES for t in types):
+        level = "medium"
+    else:
+        level = "low"
+
+    recs: list[str] = []
+    if level in ("high", "medium"):
+        recs.append("Apply mask(strategy='redact') before storing or sharing this text.")
+    if level == "high":
+        recs.append(
+            "Review applicable regulations (KVKK Art. 6, GDPR Art. 9) "
+            "for special category data handling."
+        )
+    if not recs:
+        recs.append("No PII detected — text is safe for LLM processing.")
+
+    return {
+        "has_pii": bool(types),
+        "pii_types": types,
+        "risk_level": level,
+        "masking_required": bool(types),
+        "recommendations": recs,
+    }
