@@ -1,6 +1,7 @@
 """Integration tests for the public audit() and mask() API."""
+import asyncio
 import flexorch_audit
-from flexorch_audit import audit, mask
+from flexorch_audit import audit, mask, audit_stream, compliance_report
 
 
 def test_version_present():
@@ -167,10 +168,6 @@ def test_audit_default_locale_is_und():
 
 
 # ── audit_stream ──────────────────────────────────────────────────────────────
-
-import asyncio
-import pytest
-from flexorch_audit import audit_stream, compliance_report, audit
 
 
 async def _collect(texts, locale="und"):

@@ -4,6 +4,7 @@ from flexorch_audit._pii import (
     _valid_iban_intl, _valid_phone_intl,
     _valid_steuer_id_de, _valid_partita_iva_it, _valid_bsn_nl,
     _valid_dni_es, _valid_nie_es, _valid_ni_uk, _valid_ein_us,
+    _valid_pesel_pl, _valid_svnr_at, _valid_nrrniss_be,
 )
 
 
@@ -700,8 +701,6 @@ def test_ssn_still_detected_in_us_locale():
 
 
 # -- PL -- PESEL --------------------------------------------------------------
-
-from flexorch_audit._pii import _valid_pesel_pl, _valid_svnr_at, _valid_nrrniss_be
 
 
 def test_valid_pesel_pl():

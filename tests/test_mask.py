@@ -1,5 +1,6 @@
 import pytest
 from flexorch_audit._mask import apply_mask
+from flexorch_audit._pii import _valid_tckn, _valid_iban
 
 
 _FINDINGS = [{"type": "email", "value": "a@b.com", "start": 7, "end": 14}]
@@ -88,8 +89,6 @@ def test_hash_is_deterministic():
 
 
 # ── replace strategy — valid synthetic values ─────────────────────────────────
-
-from flexorch_audit._pii import _valid_tckn, _valid_iban
 
 
 def test_replace_tckn_is_valid():
