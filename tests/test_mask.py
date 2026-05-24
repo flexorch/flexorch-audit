@@ -1,5 +1,6 @@
 import pytest
 from flexorch_audit._mask import apply_mask
+from flexorch_audit._pii import _valid_tckn, _valid_iban
 
 
 _FINDINGS = [{"type": "email", "value": "a@b.com", "start": 7, "end": 14}]
@@ -85,3 +86,41 @@ def test_hash_is_deterministic():
     r1 = apply_mask(_TEXT, _FINDINGS, strategy="hash")
     r2 = apply_mask(_TEXT, _FINDINGS, strategy="hash")
     assert r1 == r2
+
+
+# ── replace strategy — valid synthetic values ─────────────────────────────────
+
+
+def test_replace_tckn_is_valid():
+    findings = [{"type": "national_id_tr", "value": "12345678950", "start": 4, "end": 15}]
+    result = apply_mask("ID: 12345678950 end", findings, strategy="replace")
+    replaced = result[4:15]
+    assert _valid_tckn(replaced) is True
+
+
+def test_replace_tckn_is_deterministic():
+    findings = [{"type": "national_id_tr", "value": "12345678950", "start": 0, "end": 11}]
+    r1 = apply_mask("12345678950", findings, strategy="replace")
+    r2 = apply_mask("12345678950", findings, strategy="replace")
+    assert r1 == r2
+
+
+def test_replace_iban_tr_is_valid():
+    findings = [{"type": "iban_tr", "value": "TR330006100519786457841326", "start": 6, "end": 32}]
+    result = apply_mask("IBAN: TR330006100519786457841326 ok", findings, strategy="replace")
+    replaced = result[6:32]
+    assert replaced.startswith("TR")
+    assert _valid_iban(replaced.replace(" ", "")) is True
+
+
+def test_replace_name_from_pool():
+    findings = [{"type": "name", "value": "Ali Yıldız", "start": 5, "end": 15}]
+    result = apply_mask("Ad: Ali Yıldız ok", findings, strategy="replace")
+    assert "Ali Yıldız" not in result
+    assert len(result.split()[1]) > 0  # replaced with something
+
+
+def test_replace_unknown_type_uses_tag():
+    findings = [{"type": "unknown_type_x", "value": "abc", "start": 0, "end": 3}]
+    result = apply_mask("abc", findings, strategy="replace")
+    assert result == "[UNKNOWN_TYPE_X]"

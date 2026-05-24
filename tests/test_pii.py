@@ -4,6 +4,7 @@ from flexorch_audit._pii import (
     _valid_iban_intl, _valid_phone_intl,
     _valid_steuer_id_de, _valid_partita_iva_it, _valid_bsn_nl,
     _valid_dni_es, _valid_nie_es, _valid_ni_uk, _valid_ein_us,
+    _valid_pesel_pl, _valid_svnr_at, _valid_nrrniss_be,
 )
 
 
@@ -697,3 +698,108 @@ def test_itin_detected():
 def test_ssn_still_detected_in_us_locale():
     findings = detect_pii("SSN: 555-12-1234", locale="us")
     assert any(f["type"] == "ssn" for f in findings)
+
+
+# -- PL -- PESEL --------------------------------------------------------------
+
+
+def test_valid_pesel_pl():
+    # 44051401359 -- born 1944-05-14, check digit 9 (total=101, (10-1)%10=9)
+    assert _valid_pesel_pl("44051401359") is True
+
+
+def test_invalid_pesel_wrong_checksum():
+    assert _valid_pesel_pl("44051401358") is False
+
+
+def test_pesel_detected_pl_locale():
+    findings = detect_pii("PESEL: 44051401359", locale="pl")
+    assert any(f["type"] == "national_id_pl" and f["value"] == "44051401359" for f in findings)
+
+
+def test_pesel_not_detected_tr_locale():
+    findings = detect_pii("PESEL: 44051401359", locale="tr")
+    assert not any(f["type"] == "national_id_pl" for f in findings)
+
+
+def test_pesel_detected_und_locale():
+    findings = detect_pii("PESEL: 44051401359", locale="und")
+    assert any(f["type"] == "national_id_pl" for f in findings)
+
+
+def test_invalid_pesel_length():
+    assert _valid_pesel_pl("4405140135") is False
+    assert _valid_pesel_pl("440514013590") is False
+
+
+# -- AT -- SVNr ---------------------------------------------------------------
+
+
+def test_valid_svnr_at():
+    # 1232010180: total=3*1+7*2+9*3+5*0+8*1+4*0+2*1+1*8+6*0=62, 62%10=2 -> pos3=2
+    assert _valid_svnr_at("1232010180") is True
+
+
+def test_invalid_svnr_at():
+    assert _valid_svnr_at("1234010180") is False
+
+
+def test_svnr_detected_at_locale():
+    findings = detect_pii("SVNr: 1232010180", locale="at")
+    assert any(f["type"] == "social_id_at" and f["value"] == "1232010180" for f in findings)
+
+
+def test_svnr_not_detected_tr_locale():
+    findings = detect_pii("SVNr: 1232010180", locale="tr")
+    assert not any(f["type"] == "social_id_at" for f in findings)
+
+
+def test_svnr_detected_und_locale():
+    findings = detect_pii("SVNr: 1232010180", locale="und")
+    assert any(f["type"] == "social_id_at" for f in findings)
+
+
+# -- BE -- Rijksregisternummer ------------------------------------------------
+
+
+def test_valid_nrrniss_be_pre2000():
+    body = 930101001
+    check = 97 - (body % 97)
+    s = f"{body:09d}{check:02d}"
+    assert _valid_nrrniss_be(s) is True
+
+
+def test_valid_nrrniss_be_post2000():
+    body = 20314002
+    body2k = 2_000_000_000 + body
+    check = 97 - (body2k % 97)
+    s = f"{body:09d}{check:02d}"
+    assert _valid_nrrniss_be(s) is True
+
+
+def test_invalid_nrrniss_be():
+    assert _valid_nrrniss_be("93010100100") is False
+
+
+def test_nrrniss_detected_be_locale():
+    body = 930101001
+    check = 97 - (body % 97)
+    s = f"{body:09d}{check:02d}"
+    findings = detect_pii(f"RRN: {s}", locale="be")
+    assert any(f["type"] == "national_id_be" and f["value"] == s for f in findings)
+
+
+def test_nrrniss_not_detected_tr_locale():
+    body = 930101001
+    check = 97 - (body % 97)
+    s = f"{body:09d}{check:02d}"
+    findings = detect_pii(f"RRN: {s}", locale="tr")
+    assert not any(f["type"] == "national_id_be" for f in findings)
+
+
+def test_nrrniss_detected_und_locale():
+    body = 930101001
+    check = 97 - (body % 97)
+    s = f"{body:09d}{check:02d}"
+    findings = detect_pii(f"RRN: {s}", locale="und")
+    assert any(f["type"] == "national_id_be" for f in findings)

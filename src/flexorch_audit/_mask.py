@@ -1,19 +1,52 @@
 import hashlib
 
-# Realistic-looking synthetic replacements for strategy="replace"
-_SYNTHETIC: dict[str, str] = {
+# Pre-computed valid TCKNs for strategy="replace" — checksum verified
+_TCKN_POOL = ["12345678950", "10000000146", "23456789060"]
+
+# Pre-computed valid TR IBANs for strategy="replace" — mod-97 verified
+_IBAN_TR_POOL = ["TR330006100519786457841326", "TR390006199999888888888813"]
+
+# Name pool for strategy="replace"
+_NAME_POOL = [
+    "Ahmet Yılmaz", "Mehmet Demir", "Ayşe Kaya", "Fatma Çelik",
+    "Ali Şahin", "Zeynep Arslan", "Mustafa Öztürk", "Emine Doğan",
+    "İbrahim Kurt", "Hatice Aydın", "Hasan Yıldız", "Elif Güneş",
+    "Hüseyin Çetin", "Meryem Polat", "Ömer Koç", "Büşra Tekin",
+    "Yusuf Erdoğan", "Selin Bozkurt", "Kemal Akın", "Derya Uçar",
+]
+
+_STATIC_SYNTHETIC: dict[str, str] = {
     "email": "user@example.com",
     "phone": "+1 000 000 0000",
     "phone_tr": "0500 000 00 00",
-    "national_id_tr": "00000000000",
+    "phone_intl": "+1 000 000 0000",
     "ssn": "000-00-0000",
     "iban": "XX00 0000 0000 0000 0000 00",
     "credit_card": "0000 0000 0000 0000",
     "ip": "0.0.0.0",
-    "name": "AD SOYAD",
+    "ip_v6": "2001:db8::1",
+    "national_id_pl": "00000000000",
+    "social_id_at": "0000000000",
+    "national_id_be": "00000000000",
 }
 
 _VALID_STRATEGIES = frozenset({"redact", "replace", "token", "hash"})
+
+
+def _pick(pool: list[str], seed: str) -> str:
+    """Deterministically pick from pool using SHA-256 of seed."""
+    h = int(hashlib.sha256(seed.encode()).hexdigest(), 16)
+    return pool[h % len(pool)]
+
+
+def _synthetic(ptype: str, original: str) -> str:
+    if ptype == "national_id_tr":
+        return _pick(_TCKN_POOL, original)
+    if ptype in ("iban_tr", "iban_intl"):
+        return _pick(_IBAN_TR_POOL, original)
+    if ptype == "name":
+        return _pick(_NAME_POOL, original)
+    return _STATIC_SYNTHETIC.get(ptype, f"[{ptype.upper()}]")
 
 
 def apply_mask(text: str, findings: list[dict], strategy: str = "redact") -> str:
@@ -22,7 +55,7 @@ def apply_mask(text: str, findings: list[dict], strategy: str = "redact") -> str
 
     Strategies:
         redact  — [REDACTED_EMAIL], [REDACTED_PHONE_TR], …  (default)
-        replace — realistic synthetic value (e.g. user@example.com)
+        replace — realistic synthetic value (e.g. user@example.com, valid TCKN)
         token   — <PII_EMAIL_1>, <PII_EMAIL_2>, …  (unique per type per call)
         hash    — first 16 hex chars of SHA-256(original_value)
 
@@ -45,7 +78,7 @@ def apply_mask(text: str, findings: list[dict], strategy: str = "redact") -> str
         if strategy == "redact":
             replacement = f"[REDACTED_{tag}]"
         elif strategy == "replace":
-            replacement = _SYNTHETIC.get(ptype, f"[{tag}]")
+            replacement = _synthetic(ptype, finding["value"])
         elif strategy == "token":
             replacement = f"<PII_{tag}_{counter[ptype]}>"
         else:  # hash

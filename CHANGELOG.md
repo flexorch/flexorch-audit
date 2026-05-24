@@ -5,6 +5,60 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.6.0] — 2026-05-24
+
+### Added
+
+**New PII detectors (EU locales)**
+
+| Detector | Locale | Field | Algorithm |
+|----------|--------|-------|-----------|
+| `national_id_pl` | `pl` | PESEL | 10-weight checksum, weights `[1,3,7,9,1,3,7,9,1,3]` |
+| `social_id_at`   | `at` | Sozialversicherungsnummer | Luhn-style, 10 weights, check at position 3 |
+| `national_id_be` | `be` | Rijksregisternummer/NISS | mod-97, pre- and post-2000 birth year branches |
+
+All three are also active in the `und`/`all` locale.
+
+**`audit_stream()` — async generator API**
+
+```python
+async for result in audit_stream(lines()):
+    print(result.quality_grade, result.pii_summary)
+```
+
+Audits texts one at a time from any `AsyncIterable[str]`.  
+Each text is processed via `asyncio.to_thread()` so the event loop is not blocked.
+
+**`compliance_report()` — KVKK/GDPR risk summary**
+
+```python
+report = compliance_report(audit(text))
+report["risk_level"]       # "none" | "low" | "medium" | "high"
+report["masking_required"] # True when any PII was found
+report["recommendations"]  # actionable next steps
+```
+
+Risk classification:
+- **high** — national IDs, SSN, credit card, tax IDs
+- **medium** — email, phone, IBAN, name
+- **low** — company names and other lower-risk types
+- **none** — no PII detected
+
+**`mask(strategy="replace")` — deterministic synthetic values**
+
+`replace` now produces checksum-valid synthetic replacements:
+
+| PII type | Synthetic value |
+|----------|----------------|
+| `national_id_tr` | valid TCKN (checksum verified) |
+| `iban_tr` / `iban_intl` | valid TR IBAN (mod-97 verified) |
+| `name` | Turkish name from pool |
+| `email`, `phone_tr`, `ssn`, `ip`, `ip_v6`, … | static safe values |
+
+Replacement is deterministic: same original value always maps to the same synthetic replacement (SHA-256 seed).
+
+---
+
 ## [0.5.1] — 2026-05-14
 
 ### Fixed

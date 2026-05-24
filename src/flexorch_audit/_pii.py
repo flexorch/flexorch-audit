@@ -349,6 +349,53 @@ def _valid_ein_us(s: str) -> bool:
     return s[:2] not in _EIN_INVALID_PREFIXES
 
 
+# ── PL detectors ──────────────────────────────────────────────────────────────
+
+# PESEL — 11 digits; birth date encoded in first 6, weighted mod-10 checksum
+PESEL_PL_RE = re.compile(r"\b(\d{11})\b")
+
+
+def _valid_pesel_pl(s: str) -> bool:
+    """Polish PESEL: weights [1,3,7,9,1,3,7,9,1,3], last digit = (10 - sum%10) % 10."""
+    if len(s) != 11 or not s.isdigit():
+        return False
+    weights = [1, 3, 7, 9, 1, 3, 7, 9, 1, 3]
+    total = sum(w * int(d) for w, d in zip(weights, s))
+    return (10 - total % 10) % 10 == int(s[10])
+
+
+# ── AT detectors ──────────────────────────────────────────────────────────────
+
+# Sozialversicherungsnummer — 10 digits; position 4 (0-indexed: 3) is check digit
+SVNR_AT_RE = re.compile(r"\b(\d{10})\b")
+
+
+def _valid_svnr_at(s: str) -> bool:
+    """Austrian SVNr: weights [3,7,9,0,5,8,4,2,1,6]; weight 0 at check position; sum%10 == check."""
+    if len(s) != 10 or not s.isdigit():
+        return False
+    weights = [3, 7, 9, 0, 5, 8, 4, 2, 1, 6]
+    total = sum(w * int(d) for w, d in zip(weights, s))
+    return total % 10 == int(s[3])
+
+
+# ── BE detectors ──────────────────────────────────────────────────────────────
+
+# Rijksregisternummer / Numéro de registre national — 11 digits; mod-97 check on last 2
+NRRNISS_BE_RE = re.compile(r"\b(\d{11})\b")
+
+
+def _valid_nrrniss_be(s: str) -> bool:
+    """Belgian RRN: 97 - (body % 97) == check; body prepended with '2' for births after 1999."""
+    if len(s) != 11 or not s.isdigit():
+        return False
+    body = int(s[:9])
+    check = int(s[9:])
+    if (97 - body % 97) == check:
+        return True
+    return (97 - (2_000_000_000 + body) % 97) == check
+
+
 # ── Locale registry ───────────────────────────────────────────────────────────
 
 _LOCALE_DETECTORS: dict[str, set[str]] = {
@@ -364,6 +411,9 @@ _LOCALE_DETECTORS: dict[str, set[str]] = {
     "nl": {"national_id_nl", "company_id_nl"},
     "es": {"national_id_es", "tax_id_es"},
     "uk": {"social_id_uk", "tax_id_uk"},
+    "pl": {"national_id_pl"},
+    "at": {"social_id_at"},
+    "be": {"national_id_be"},
 }
 _UNIVERSAL: set[str] = {"email", "iban", "credit_card", "ip", "ip_v6"}
 
@@ -552,6 +602,21 @@ def detect_pii(text: str, locale: str = "und") -> list[dict]:
     if "company_name_intl" in active:
         for m in COMPANY_NAME_INTL_RE.finditer(t):
             findings.append({"type": "company_name_intl", "value": m.group(1), "start": m.start(1), "end": m.end(1)})
+
+    if "national_id_pl" in active:
+        for m in PESEL_PL_RE.finditer(t):
+            if _valid_pesel_pl(m.group(1)):
+                findings.append({"type": "national_id_pl", "value": m.group(1), "start": m.start(1), "end": m.end(1)})
+
+    if "social_id_at" in active:
+        for m in SVNR_AT_RE.finditer(t):
+            if _valid_svnr_at(m.group(1)):
+                findings.append({"type": "social_id_at", "value": m.group(1), "start": m.start(1), "end": m.end(1)})
+
+    if "national_id_be" in active:
+        for m in NRRNISS_BE_RE.finditer(t):
+            if _valid_nrrniss_be(m.group(1)):
+                findings.append({"type": "national_id_be", "value": m.group(1), "start": m.start(1), "end": m.end(1)})
 
     findings.sort(key=lambda x: x["start"])
 

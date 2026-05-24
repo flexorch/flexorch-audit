@@ -82,9 +82,37 @@ synchronous and stateless.
 Regex-based detectors optimise for recall over precision. Expect some false positives,
 especially for:
 
-- Short numeric sequences (BSN NL, Partita IVA IT) in dense numeric text
+- Short numeric sequences (BSN NL, Partita IVA IT, PL PESEL, AT SVNr, BE RRN) in dense numeric text
 - Company name patterns in capitalized headings
 - Phone numbers in IP addresses or reference codes
 
 Apply locale narrowing (`locale="tr"` instead of `locale="und"`) and post-filter
 by document context to reduce noise in production use.
+
+---
+
+## `mask(strategy="replace")` — synthetic value coverage
+
+Deterministic synthetic values are provided for: `national_id_tr`, `iban_tr`,
+`iban_intl`, `name`, `email`, `phone_tr`, `phone_intl`, `ssn`, `iban`,
+`credit_card`, `ip`, `ip_v6`, `national_id_pl`, `social_id_at`, `national_id_be`.
+
+For any PII type not in this list, the fallback is `[TYPE_NAME]`
+(e.g. `[SIRET_FR]`). This is a safe placeholder, not a realistic synthetic value.
+
+---
+
+## `compliance_report()` — technical summary only
+
+`compliance_report()` classifies PII findings into risk levels (none/low/medium/high)
+and generates actionable recommendations. It is a **technical summary only** — not a
+legal document, regulatory opinion, or compliance certification. Risk classifications
+reflect common KVKK/GDPR guidance but should not substitute for qualified legal advice.
+
+---
+
+## `audit_stream()` — sequential processing only
+
+`audit_stream()` processes texts sequentially (one at a time via `asyncio.to_thread()`).
+It does not parallelise across multiple CPU cores. For throughput-sensitive workloads,
+use `audit_batch()` inside a thread pool externally.
