@@ -58,6 +58,33 @@ clean = mask(text, result["pii"], strategy="redact")
 
 ![demo](assets/demo.svg)
 
+## One-shot redaction
+
+```python
+from flexorch_audit import redact_for_llm
+
+clean = redact_for_llm("TCKN: 12345678950, email: ali@example.com", locale="tr")
+# "TCKN: [REDACTED_NATIONAL_ID_TR], email: [REDACTED_EMAIL]"
+
+# Different masking strategies
+redact_for_llm(text, locale="tr", strategy="token")   # <PII_NATIONAL_ID_TR_1>
+redact_for_llm(text, locale="tr", strategy="hash")    # [3d4f9a1b2c8e7f0a]
+redact_for_llm(text, locale="tr", strategy="replace") # static synthetic value
+```
+
+No PII found → original text returned unchanged.
+
+## Token estimation
+
+```python
+from flexorch_audit import estimate_tokens
+
+estimate_tokens("The quick brown fox jumps over the lazy dog.")  # → 16
+estimate_tokens("")  # → 0
+```
+
+Heuristic: `words × 4/3` — no `tiktoken` required. Accuracy within ~15% of the real tokenizer for English and most European languages; treat as a planning estimate for context window sizing and cost forecasting.
+
 ## Batch audit
 
 ```python
@@ -231,6 +258,40 @@ Score formula: `completeness × (0.4 × noise_score + 0.4 × length_score + 0.2)
 - **Free-standing name detection** (without a label prefix) requires NLP/NER — not included.
 - `replace` masking uses static synthetic values; locale-aware realistic synthesis is not implemented.
 - The library audits plain text. PDF/DOCX parsing, e-invoice extraction, and pipeline orchestration are out of scope.
+
+## Integrations
+
+[![Works with LangChain](https://img.shields.io/badge/Works%20with-LangChain-blue)](examples/langchain_loader.py)
+[![Works with LlamaIndex](https://img.shields.io/badge/Works%20with-LlamaIndex-purple)](examples/llamaindex_reader.py)
+
+`flexorch-audit` slots into any LangChain or LlamaIndex pipeline as a pre-load filter — audit quality, detect PII, and optionally mask before your documents reach the LLM.
+
+**LangChain** — [`examples/langchain_loader.py`](examples/langchain_loader.py)
+
+```python
+from examples.langchain_loader import AuditedLoader  # copy to your project
+
+loader = AuditedLoader(
+    texts=my_texts,
+    locale="tr",       # or "de", "fr", "us", "und" (all)
+    mask_pii=True,     # redact PII before loading
+    min_grade="B",     # skip low-quality documents
+)
+docs = loader.load()
+# doc.metadata → {"quality_grade": "A", "quality_score": 0.91, "pii_summary": [...], ...}
+```
+
+**LlamaIndex** — [`examples/llamaindex_reader.py`](examples/llamaindex_reader.py)
+
+```python
+from examples.llamaindex_reader import AuditedReader  # copy to your project
+
+reader = AuditedReader(locale="tr", mask_pii=True)
+docs = reader.load_data(my_texts, min_grade="B")
+# doc.extra_info → {"quality_grade": "A", "quality_score": 0.91, "pii_summary": [...], ...}
+```
+
+Both loaders are thin wrappers (~60 lines) with no new dependencies beyond `langchain-core` or `llama-index-core`. Copy them into your project — no framework lock-in.
 
 ## Also available for JavaScript / TypeScript
 
