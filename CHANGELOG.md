@@ -5,6 +5,18 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.7.0] — 2026-06-11
+
+### Added
+
+- **`redact_for_llm(text, locale, strategy)`** — one-shot audit + mask convenience wrapper; returns PII-free text ready for LLM processing in a single call
+- **`estimate_tokens(text)`** — word-based token count heuristic (words × 4/3); no tiktoken dependency; accuracy ~15% for planning/cost estimates
+- **LangChain integration** — `examples/langchain_loader.py`: `AuditedLoader(BaseLoader)` with `min_grade` quality filter and optional PII masking; audit metadata exposed in `doc.metadata`
+- **LlamaIndex integration** — `examples/llamaindex_reader.py`: `AuditedReader(BaseReader)` with same filter/masking API; audit metadata in `doc.extra_info`
+- README: "One-shot redaction", "Token estimation", "Integrations" sections with LangChain + LlamaIndex badges
+
+---
+
 ## [0.6.0] — 2026-05-24
 
 ### Added

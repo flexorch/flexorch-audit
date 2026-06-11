@@ -235,6 +235,72 @@ def test_compliance_recommendations_present():
     assert len(report["recommendations"]) >= 1
 
 
+# ── redact_for_llm ────────────────────────────────────────────────────────────
+
+def test_redact_for_llm_removes_pii():
+    from flexorch_audit import redact_for_llm
+    clean = redact_for_llm("TCKN: 12345678950, email: ali@example.com", locale="tr")
+    assert "12345678950" not in clean
+    assert "ali@example.com" not in clean
+
+
+def test_redact_for_llm_no_pii_unchanged():
+    from flexorch_audit import redact_for_llm
+    text = "The quick brown fox jumps over the lazy dog."
+    assert redact_for_llm(text) == text
+
+
+def test_redact_for_llm_empty_string():
+    from flexorch_audit import redact_for_llm
+    assert redact_for_llm("") == ""
+
+
+def test_redact_for_llm_strategy_token():
+    from flexorch_audit import redact_for_llm
+    clean = redact_for_llm("Email: hello@example.com", strategy="token")
+    assert "hello@example.com" not in clean
+    assert "<PII_EMAIL" in clean
+
+
+def test_redact_for_llm_default_locale_und():
+    from flexorch_audit import redact_for_llm
+    # SSN detected with "und" (all detectors active)
+    clean = redact_for_llm("SSN: 123-45-6789")
+    assert "123-45-6789" not in clean
+
+
+# ── estimate_tokens ───────────────────────────────────────────────────────────
+
+def test_estimate_tokens_empty():
+    from flexorch_audit import estimate_tokens
+    assert estimate_tokens("") == 0
+    assert estimate_tokens("   ") == 0
+
+
+def test_estimate_tokens_single_word():
+    from flexorch_audit import estimate_tokens
+    assert estimate_tokens("hello") >= 1
+
+
+def test_estimate_tokens_scales_with_length():
+    from flexorch_audit import estimate_tokens
+    short = estimate_tokens("one two three")
+    long = estimate_tokens("one two three " * 10)
+    assert long > short
+
+
+def test_estimate_tokens_rough_range():
+    from flexorch_audit import estimate_tokens
+    # "The quick brown fox" = 4 words → ~5-6 tokens expected
+    result = estimate_tokens("The quick brown fox")
+    assert 4 <= result <= 8
+
+
+def test_estimate_tokens_returns_int():
+    from flexorch_audit import estimate_tokens
+    assert isinstance(estimate_tokens("some text"), int)
+
+
 def test_compliance_pii_types_sorted():
     result = audit("TC: 12345678950 email: x@y.com", locale="tr")
     report = compliance_report(result)
