@@ -349,10 +349,26 @@ def _valid_ein_us(s: str) -> bool:
     return s[:2] not in _EIN_INVALID_PREFIXES
 
 
+# ── TR SGK detector ───────────────────────────────────────────────────────────
+
+# SGK Sicil Numarası — label-prefixed 10-11 digit number
+SGK_NO_RE = re.compile(
+    r"(?:SGK\s*(?:Sicil\s*No(?:su)?|No(?:su)?|Numara(?:s[ıi])?)?|"
+    r"Sigortal[ıi]\s*(?:Sicil\s*)?(?:No|Numara(?:s[ıi])?)|SSK\s*(?:No|Numara(?:s[ıi])?|Sicil))"
+    r"\s*[:#]*\s*(\d{10,11})\b",
+    re.IGNORECASE | re.UNICODE,
+)
+
 # ── PL detectors ──────────────────────────────────────────────────────────────
 
 # PESEL — 11 digits; birth date encoded in first 6, weighted mod-10 checksum
 PESEL_PL_RE = re.compile(r"\b(\d{11})\b")
+
+# NIP (Numer Identyfikacji Podatkowej) — label-prefixed 10 digits
+NIP_PL_RE = re.compile(
+    r"(?:NIP|Numer\s+NIP|Numer\s+Identyfikacji\s+Podatkowej)\s*[:#]*\s*(\d{10})\b",
+    re.IGNORECASE,
+)
 
 
 def _valid_pesel_pl(s: str) -> bool:
@@ -363,6 +379,29 @@ def _valid_pesel_pl(s: str) -> bool:
     total = sum(w * int(d) for w, d in zip(weights, s))
     return (10 - total % 10) % 10 == int(s[10])
 
+
+# ── PT detector ───────────────────────────────────────────────────────────────
+
+# NIF (Número de Identificação Fiscal) — label-prefixed 9 digits, weighted mod-11 checksum
+NIF_PT_RE = re.compile(
+    r"(?:NIF|N[uú]mero\s+de\s+Contribuinte|Contribuinte)\s*[:#]*\s*(\d{9})\b",
+    re.IGNORECASE,
+)
+
+# ── SE detector ────────────────────────────────────────────────────────────────
+
+# Personnummer — YYMMDD-NNNN or YYYYMMDD-NNNN; + separator = born 1800s
+PERSONNUMMER_SE_RE = re.compile(r"\b(\d{6,8}[-+]\d{4})\b")
+
+# ── DK detector ────────────────────────────────────────────────────────────────
+
+# CPR (Civil Personal Register) — DDMMYY-XXXX
+CPR_DK_RE = re.compile(r"\b(\d{6}-\d{4})\b")
+
+# ── FI detector ────────────────────────────────────────────────────────────────
+
+# HETU (Henkilötunnus) — DDMMYY[+\-A]\d{3}[checksum-char]; separator = century marker
+HETU_FI_RE = re.compile(r"\b(\d{6}[+\-A]\d{3}[0-9A-FHJ-NPR-Y])\b")
 
 # ── AT detectors ──────────────────────────────────────────────────────────────
 
@@ -385,6 +424,17 @@ def _valid_svnr_at(s: str) -> bool:
 NRRNISS_BE_RE = re.compile(r"\b(\d{11})\b")
 
 
+def _valid_nif_pt(s: str) -> bool:
+    """Portuguese NIF: 9 digits, weighted sum mod 11 != 0/1 → check digit."""
+    if len(s) != 9 or not s.isdigit() or s[0] == "0":
+        return False
+    total = sum((9 - i) * int(s[i]) for i in range(8))
+    check = (11 - total % 11) % 11
+    if check >= 10:
+        check = 0
+    return check == int(s[8])
+
+
 def _valid_nrrniss_be(s: str) -> bool:
     """Belgian RRN: 97 - (body % 97) == check; body prepended with '2' for births after 1999."""
     if len(s) != 11 or not s.isdigit():
@@ -401,17 +451,21 @@ def _valid_nrrniss_be(s: str) -> bool:
 _LOCALE_DETECTORS: dict[str, set[str]] = {
     "tr": {
         "national_id_tr", "tax_id_tr", "phone_tr", "name",
-        "iban_tr", "company_name_tr", "mersis_no", "postal_code_tr", "province_tr",
+        "iban_tr", "company_name_tr", "mersis_no", "postal_code_tr", "province_tr", "sgk_no",
     },
     "us": {"ssn", "tax_id_us", "national_id_us", "phone_intl", "company_name_intl"},
     "eu": {"phone_intl", "iban_intl", "company_name_intl"},
-    "de": {"tax_id_de", "social_id_de"},
-    "fr": {"siret_fr", "company_id_fr", "social_id_fr"},
+    "de": {"tax_id_de", "social_id_de", "social_id_at"},
+    "fr": {"siret_fr", "company_id_fr", "social_id_fr", "national_id_be"},
     "it": {"national_id_it", "tax_id_it"},
-    "nl": {"national_id_nl", "company_id_nl"},
+    "nl": {"national_id_nl", "company_id_nl", "national_id_be"},
     "es": {"national_id_es", "tax_id_es"},
     "uk": {"social_id_uk", "tax_id_uk"},
-    "pl": {"national_id_pl"},
+    "pl": {"national_id_pl", "tax_id_pl"},
+    "pt": {"tax_id_pt"},
+    "sv": {"national_id_se"},
+    "da": {"national_id_dk"},
+    "fi": {"national_id_fi"},
     "at": {"social_id_at"},
     "be": {"national_id_be"},
 }
@@ -440,10 +494,20 @@ def detect_pii(text: str, locale: str = "und") -> list[dict]:
         "und" — All detectors combined (default; use when language is unknown)
         "all" — Alias for "und"
         "tr"  — Turkish: TCKN, VKN, phone_tr, name, iban_tr, company_name_tr,
-                mersis_no, postal_code_tr, province_tr
-        "us"  — US: SSN, phone_intl, company_name_intl
+                mersis_no, postal_code_tr, province_tr, sgk_no
+        "us"  — US: SSN, EIN, ITIN, phone_intl, company_name_intl
         "eu"  — EU: phone_intl, iban_intl, company_name_intl
-        "de" / "fr" / "it" / "nl" / "es" / "uk" — country-specific detectors
+        "de"  — German: tax_id_de, social_id_de, social_id_at
+        "fr"  — French: siret_fr, company_id_fr, social_id_fr, national_id_be
+        "nl"  — Dutch: national_id_nl, company_id_nl, national_id_be
+        "pl"  — Polish: national_id_pl (PESEL), tax_id_pl (NIP)
+        "pt"  — Portuguese: tax_id_pt (NIF)
+        "sv"  — Swedish: national_id_se (Personnummer)
+        "da"  — Danish: national_id_dk (CPR)
+        "fi"  — Finnish: national_id_fi (HETU)
+        "at"  — Austrian: social_id_at (SVNr)
+        "be"  — Belgian: national_id_be (RRN/NRRNISS)
+        "it" / "es" / "uk" — country-specific detectors
         Universal (always active): email, iban*, credit_card, ip, ip_v6
         * iban suppressed per-span when iban_tr or iban_intl fires.
     """
@@ -507,6 +571,10 @@ def detect_pii(text: str, locale: str = "und") -> list[dict]:
     if "company_name_tr" in active:
         for m in COMPANY_NAME_TR_RE.finditer(t):
             findings.append({"type": "company_name_tr", "value": m.group(1), "start": m.start(1), "end": m.end(1)})
+
+    if "sgk_no" in active:
+        for m in SGK_NO_RE.finditer(t):
+            findings.append({"type": "sgk_no", "value": m.group(1), "start": m.start(1), "end": m.end(1)})
 
     if "mersis_no" in active:
         for m in MERSIS_RE.finditer(t):
@@ -607,6 +675,27 @@ def detect_pii(text: str, locale: str = "und") -> list[dict]:
         for m in PESEL_PL_RE.finditer(t):
             if _valid_pesel_pl(m.group(1)):
                 findings.append({"type": "national_id_pl", "value": m.group(1), "start": m.start(1), "end": m.end(1)})
+
+    if "tax_id_pl" in active:
+        for m in NIP_PL_RE.finditer(t):
+            findings.append({"type": "tax_id_pl", "value": m.group(1), "start": m.start(1), "end": m.end(1)})
+
+    if "tax_id_pt" in active:
+        for m in NIF_PT_RE.finditer(t):
+            if _valid_nif_pt(m.group(1)):
+                findings.append({"type": "tax_id_pt", "value": m.group(1), "start": m.start(1), "end": m.end(1)})
+
+    if "national_id_se" in active:
+        for m in PERSONNUMMER_SE_RE.finditer(t):
+            findings.append({"type": "national_id_se", "value": m.group(1), "start": m.start(1), "end": m.end(1)})
+
+    if "national_id_dk" in active:
+        for m in CPR_DK_RE.finditer(t):
+            findings.append({"type": "national_id_dk", "value": m.group(1), "start": m.start(1), "end": m.end(1)})
+
+    if "national_id_fi" in active:
+        for m in HETU_FI_RE.finditer(t):
+            findings.append({"type": "national_id_fi", "value": m.group(1), "start": m.start(1), "end": m.end(1)})
 
     if "social_id_at" in active:
         for m in SVNR_AT_RE.finditer(t):

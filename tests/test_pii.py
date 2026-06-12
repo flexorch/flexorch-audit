@@ -803,3 +803,150 @@ def test_nrrniss_detected_und_locale():
     s = f"{body:09d}{check:02d}"
     findings = detect_pii(f"RRN: {s}", locale="und")
     assert any(f["type"] == "national_id_be" for f in findings)
+
+
+def test_nrrniss_detected_fr_locale():
+    body = 930101001
+    check = 97 - (body % 97)
+    s = f"{body:09d}{check:02d}"
+    findings = detect_pii(f"RRN: {s}", locale="fr")
+    assert any(f["type"] == "national_id_be" for f in findings)
+
+
+def test_nrrniss_detected_nl_locale():
+    body = 930101001
+    check = 97 - (body % 97)
+    s = f"{body:09d}{check:02d}"
+    findings = detect_pii(f"RRN: {s}", locale="nl")
+    assert any(f["type"] == "national_id_be" for f in findings)
+
+
+# -- AT -- social_id_at in de locale -----------------------------------------
+
+def test_svnr_detected_de_locale():
+    findings = detect_pii("SVNr: 1232010180", locale="de")
+    assert any(f["type"] == "social_id_at" and f["value"] == "1232010180" for f in findings)
+
+
+# -- TR -- SGK Sicil Numarası -------------------------------------------------
+
+def test_sgk_detected_tr_locale():
+    findings = detect_pii("SGK No: 1234567890", locale="tr")
+    assert any(f["type"] == "sgk_no" and f["value"] == "1234567890" for f in findings)
+
+
+def test_sgk_detected_ssk_prefix():
+    findings = detect_pii("SSK Sicil: 12345678901", locale="tr")
+    assert any(f["type"] == "sgk_no" and f["value"] == "12345678901" for f in findings)
+
+
+def test_sgk_not_detected_without_prefix():
+    findings = detect_pii("1234567890", locale="tr")
+    assert not any(f["type"] == "sgk_no" for f in findings)
+
+
+def test_sgk_detected_und_locale():
+    findings = detect_pii("SGK No: 1234567890", locale="und")
+    assert any(f["type"] == "sgk_no" for f in findings)
+
+
+# -- PL -- NIP (tax_id_pl) ----------------------------------------------------
+
+def test_nip_detected_pl_locale():
+    findings = detect_pii("NIP: 1234567890", locale="pl")
+    assert any(f["type"] == "tax_id_pl" and f["value"] == "1234567890" for f in findings)
+
+
+def test_nip_not_detected_tr_locale():
+    findings = detect_pii("NIP: 1234567890", locale="tr")
+    assert not any(f["type"] == "tax_id_pl" for f in findings)
+
+
+def test_nip_detected_und_locale():
+    findings = detect_pii("NIP: 1234567890", locale="und")
+    assert any(f["type"] == "tax_id_pl" for f in findings)
+
+
+# -- PT -- NIF (tax_id_pt) ----------------------------------------------------
+
+def test_nif_pt_detected_pt_locale():
+    # 123456789 is a valid NIF (checksum verified)
+    findings = detect_pii("NIF: 123456789", locale="pt")
+    assert any(f["type"] == "tax_id_pt" and f["value"] == "123456789" for f in findings)
+
+
+def test_nif_pt_invalid_checksum_not_detected():
+    findings = detect_pii("NIF: 123456780", locale="pt")
+    assert not any(f["type"] == "tax_id_pt" for f in findings)
+
+
+def test_nif_pt_not_detected_tr_locale():
+    findings = detect_pii("NIF: 123456789", locale="tr")
+    assert not any(f["type"] == "tax_id_pt" for f in findings)
+
+
+def test_nif_pt_detected_und_locale():
+    findings = detect_pii("NIF: 123456789", locale="und")
+    assert any(f["type"] == "tax_id_pt" for f in findings)
+
+
+# -- SE -- Personnummer (national_id_se) ---------------------------------------
+
+def test_personnummer_detected_sv_locale():
+    findings = detect_pii("Personnummer: 900101-1234", locale="sv")
+    assert any(f["type"] == "national_id_se" and f["value"] == "900101-1234" for f in findings)
+
+
+def test_personnummer_long_format():
+    findings = detect_pii("19900101-1234", locale="sv")
+    assert any(f["type"] == "national_id_se" for f in findings)
+
+
+def test_personnummer_not_detected_tr_locale():
+    findings = detect_pii("900101-1234", locale="tr")
+    assert not any(f["type"] == "national_id_se" for f in findings)
+
+
+def test_personnummer_detected_und_locale():
+    findings = detect_pii("Personnummer: 900101-1234", locale="und")
+    assert any(f["type"] == "national_id_se" for f in findings)
+
+
+# -- DK -- CPR (national_id_dk) -----------------------------------------------
+
+def test_cpr_detected_da_locale():
+    findings = detect_pii("CPR: 010190-1234", locale="da")
+    assert any(f["type"] == "national_id_dk" and f["value"] == "010190-1234" for f in findings)
+
+
+def test_cpr_not_detected_tr_locale():
+    findings = detect_pii("010190-1234", locale="tr")
+    assert not any(f["type"] == "national_id_dk" for f in findings)
+
+
+def test_cpr_detected_und_locale():
+    findings = detect_pii("CPR: 010190-1234", locale="und")
+    assert any(f["type"] == "national_id_dk" for f in findings)
+
+
+# -- FI -- HETU (national_id_fi) ----------------------------------------------
+
+def test_hetu_detected_fi_locale():
+    findings = detect_pii("HETU: 010190A123A", locale="fi")
+    assert any(f["type"] == "national_id_fi" and f["value"] == "010190A123A" for f in findings)
+
+
+def test_hetu_minus_separator():
+    # Format: DDMMYY-\d{3}[checksum-char]
+    findings = detect_pii("010190-123A", locale="fi")
+    assert any(f["type"] == "national_id_fi" for f in findings)
+
+
+def test_hetu_not_detected_tr_locale():
+    findings = detect_pii("010190A123A", locale="tr")
+    assert not any(f["type"] == "national_id_fi" for f in findings)
+
+
+def test_hetu_detected_und_locale():
+    findings = detect_pii("HETU: 010190A123A", locale="und")
+    assert any(f["type"] == "national_id_fi" for f in findings)

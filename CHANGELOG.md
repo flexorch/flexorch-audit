@@ -5,6 +5,37 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.8.1] — 2026-06-12
+
+### Added
+
+**New PII detectors (TR SGK + EU PL/PT/SE/DK/FI)**
+
+| Detector | Locale | Field | Algorithm |
+|----------|--------|-------|-----------|
+| `sgk_no` | `tr` | SGK Sicil Numarası | Label-prefix (`SGK No:`, `SSK No:`, `Sigortalı No:`) |
+| `tax_id_pl` | `pl` | NIP (Numer Identyfikacji Podatkowej) | Label-prefix (`NIP:`) |
+| `tax_id_pt` | `pt` | NIF (Número de Identificação Fiscal) | Label-prefix + weighted mod-11 checksum |
+| `national_id_se` | `sv` | Personnummer | Format `YYMMDD[-+]\d{4}` or `YYYYMMDD-\d{4}` |
+| `national_id_dk` | `da` | CPR (Civil Personal Register) | Format `DDMMYY-XXXX` |
+| `national_id_fi` | `fi` | HETU (Henkilötunnus) | Format `DDMMYY[+\-A]\d{3}[checksum]` |
+
+**Locale gate fixes**
+
+- `de` locale now includes `social_id_at` — Austrian documents in German trigger AT SVNr detection (matches JS package behaviour)
+- `fr` locale now includes `national_id_be` — Belgium is bilingual; French-language BE docs detect Belgian RRN
+- `nl` locale now includes `national_id_be` — same rationale for Dutch-language BE docs
+
+**New locales registered**
+
+- `pt` (Portuguese), `sv` (Swedish), `da` (Danish), `fi` (Finnish) added to `_LOCALE_DETECTORS`
+
+**Tests**
+
+- 25 new tests — `tests/test_pii.py` (243 total)
+
+---
+
 ## [0.7.0] — 2026-06-11
 
 ### Added
