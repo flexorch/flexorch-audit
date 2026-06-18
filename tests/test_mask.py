@@ -10,7 +10,7 @@ _TEXT = "Email: a@b.com end"
 def test_redact_strategy():
     result = apply_mask(_TEXT, _FINDINGS, strategy="redact")
     assert "a@b.com" not in result
-    assert "[REDACTED_EMAIL]" in result
+    assert "[MASKED_EMAIL]" in result
 
 
 def test_replace_strategy():
@@ -35,7 +35,7 @@ def test_hash_strategy():
 
 def test_default_strategy_is_redact():
     result = apply_mask(_TEXT, _FINDINGS)
-    assert "[REDACTED_EMAIL]" in result
+    assert "[MASKED_EMAIL]" in result
 
 
 def test_invalid_strategy_raises():
@@ -60,7 +60,7 @@ def test_multiple_findings_correct_order():
     result = apply_mask(text, findings, strategy="redact")
     assert "a@b.com" not in result
     assert "c@d.com" not in result
-    assert result.count("[REDACTED_EMAIL]") == 2
+    assert result.count("[MASKED_EMAIL]") == 2
 
 
 def test_token_counter_per_type():

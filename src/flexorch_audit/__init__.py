@@ -32,7 +32,7 @@ from ._quality import quality_metrics
 from ._noise import noise_metrics, noise_ratio as _noise_ratio
 from ._mask import apply_mask
 
-__version__ = "0.7.0"
+__version__ = "0.8.2"
 __all__ = ["audit", "audit_batch", "audit_stream", "mask", "redact_for_llm", "estimate_tokens", "compliance_report", "AuditResult", "__version__"]
 
 
@@ -241,7 +241,7 @@ def redact_for_llm(text: str, locale: str = "und", strategy: str = "redact") -> 
     Example::
 
         clean = redact_for_llm("TCKN: 12345678950, email: ali@example.com", locale="tr")
-        # "TCKN: [REDACTED_NATIONAL_ID_TR], email: [REDACTED_EMAIL]"
+        # "TCKN: [MASKED_NATIONAL_ID_TR], email: [MASKED_EMAIL]"
     """
     result = audit(text, locale=locale)
     return mask(text, result["pii"], strategy=strategy)

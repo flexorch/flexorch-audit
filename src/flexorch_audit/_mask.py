@@ -54,7 +54,7 @@ def apply_mask(text: str, findings: list[dict], strategy: str = "redact") -> str
     Replace PII spans in *text* according to *strategy*.
 
     Strategies:
-        redact  — [REDACTED_EMAIL], [REDACTED_PHONE_TR], …  (default)
+        redact  — [MASKED_EMAIL], [MASKED_PHONE_TR], …  (default)
         replace — realistic synthetic value (e.g. user@example.com, valid TCKN)
         token   — <PII_EMAIL_1>, <PII_EMAIL_2>, …  (unique per type per call)
         hash    — first 16 hex chars of SHA-256(original_value)
@@ -76,7 +76,7 @@ def apply_mask(text: str, findings: list[dict], strategy: str = "redact") -> str
         tag = ptype.upper()
 
         if strategy == "redact":
-            replacement = f"[REDACTED_{tag}]"
+            replacement = f"[MASKED_{tag}]"
         elif strategy == "replace":
             replacement = _synthetic(ptype, finding["value"])
         elif strategy == "token":

@@ -5,6 +5,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.8.2] — 2026-06-18
+
+### Fixed
+
+- **Masking prefix alignment**: `strategy="redact"` now produces `[MASKED_EMAIL]` / `[MASKED_NATIONAL_ID_TR]` etc., matching the FlexOrch platform API output. Previous prefix `[REDACTED_...]` diverged from the core platform, causing inconsistent placeholders when both were used in the same pipeline.
+
+---
+
 ## [0.8.1] — 2026-06-12
 
 ### Added
