@@ -38,7 +38,7 @@ def test_mask_redact_round_trip():
     result = audit(text, locale="tr")
     clean = mask(text, result["pii"], strategy="redact")
     assert "test@example.com" not in clean
-    assert "[REDACTED_EMAIL]" in clean
+    assert "[MASKED_EMAIL]" in clean
 
 
 def test_mask_no_pii_unchanged():

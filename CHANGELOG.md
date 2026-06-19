@@ -5,6 +5,27 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.9.0] — 2026-06-19
+
+### Added
+
+**New Turkish social security PII detectors (G5.1 — SGK deepening)**
+
+| Detector | Locale | Field | Algorithm |
+|----------|--------|-------|-----------|
+| `emeklilik_no` | `tr` | Emeklilik Sicil Numarası (retirement ID) | Label-prefix (`Emeklilik No:`, `Emekli Sicil No:`, `Emekli Maaşı No:`, `E Sicil:`) + 9–11 digit capture |
+| `isyeri_sicil_no` | `tr` | İşyeri SGK Sicil Numarası (employer ID) | Label-prefix (`İşyeri SGK Kodu:`, `İşyeri Tescil No:`, `SGK İşyeri Kodu:`) + 8–9 digit capture |
+| `bagkur_no` | `tr` | Bağ-Kur Sicil Numarası (self-employed ID) | Label-prefix (`Bağ-Kur Sicil No:`, `4/b Sicil No:`, `Kendi Namına Çalışan SGK No:`) + 10–11 digit capture |
+
+All three detectors are active in `tr` and `und`/`all` locales.
+Payroll dataset extraction schema updated: `sgk_isyeri_kodu`, `emeklilik_no`, `bagkur_no` fields added.
+
+### Fixed
+
+- **Stale redact assertion in `tests/test_api.py`**: `test_mask_redact_round_trip` was asserting `[REDACTED_EMAIL]` but v0.8.2 changed the redact placeholder to `[MASKED_EMAIL]`. Assertion updated to match current behavior.
+
+---
+
 ## [0.8.2] — 2026-06-18
 
 ### Fixed
