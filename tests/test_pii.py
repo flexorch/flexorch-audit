@@ -950,3 +950,71 @@ def test_hetu_not_detected_tr_locale():
 def test_hetu_detected_und_locale():
     findings = detect_pii("HETU: 010190A123A", locale="und")
     assert any(f["type"] == "national_id_fi" for f in findings)
+
+
+# -- TR SGK Derinleştirme (v0.9.0) -------------------------------------------
+# emeklilik_no, isyeri_sicil_no, bagkur_no
+
+def test_emeklilik_no_basic():
+    findings = detect_pii("Emeklilik No: 123456789", locale="tr")
+    assert any(f["type"] == "emeklilik_no" and f["value"] == "123456789" for f in findings)
+
+def test_emeklilik_sicil_no():
+    findings = detect_pii("Emekli Sicil No: 1234567890", locale="tr")
+    assert any(f["type"] == "emeklilik_no" and f["value"] == "1234567890" for f in findings)
+
+def test_emeklilik_no_too_short_not_detected():
+    findings = detect_pii("Emeklilik No: 12345678", locale="tr")
+    assert not any(f["type"] == "emeklilik_no" for f in findings)
+
+def test_emeklilik_no_not_detected_tr_locale_bare_number():
+    findings = detect_pii("numara: 123456789", locale="tr")
+    assert not any(f["type"] == "emeklilik_no" for f in findings)
+
+def test_emeklilik_no_detected_und_locale():
+    findings = detect_pii("Emeklilik No: 999888777", locale="und")
+    assert any(f["type"] == "emeklilik_no" for f in findings)
+
+def test_isyeri_sicil_no_basic():
+    findings = detect_pii("İşyeri Sicil No: 12345678", locale="tr")
+    assert any(f["type"] == "isyeri_sicil_no" and f["value"] == "12345678" for f in findings)
+
+def test_isyeri_sgk_kodu():
+    findings = detect_pii("SGK İşyeri Kodu: 123456789", locale="tr")
+    assert any(f["type"] == "isyeri_sicil_no" and f["value"] == "123456789" for f in findings)
+
+def test_isyeri_sicil_too_short_not_detected():
+    findings = detect_pii("İşyeri Sicil No: 1234567", locale="tr")
+    assert not any(f["type"] == "isyeri_sicil_no" for f in findings)
+
+def test_isyeri_sicil_not_detected_other_locale():
+    findings = detect_pii("İşyeri Sicil No: 12345678", locale="de")
+    assert not any(f["type"] == "isyeri_sicil_no" for f in findings)
+
+def test_bagkur_no_basic():
+    findings = detect_pii("Bağ-Kur Sicil No: 1234567890", locale="tr")
+    assert any(f["type"] == "bagkur_no" and f["value"] == "1234567890" for f in findings)
+
+def test_bagkur_no_space_variant():
+    findings = detect_pii("Bağ Kur No: 12345678901", locale="tr")
+    assert any(f["type"] == "bagkur_no" for f in findings)
+
+def test_bagkur_no_too_short_not_detected():
+    findings = detect_pii("Bağ-Kur No: 123456789", locale="tr")
+    assert not any(f["type"] == "bagkur_no" for f in findings)
+
+def test_bagkur_kendi_namina_variant():
+    findings = detect_pii("Kendi Namına SGK Nosu: 1234567890", locale="tr")
+    assert any(f["type"] == "bagkur_no" for f in findings)
+
+def test_sgk_detectors_all_in_one_document():
+    text = (
+        "Emeklilik No: 999888777\n"
+        "İşyeri Sicil No: 01234567\n"
+        "Bağ-Kur Sicil No: 9876543210\n"
+    )
+    findings = detect_pii(text, locale="tr")
+    types = {f["type"] for f in findings}
+    assert "emeklilik_no" in types
+    assert "isyeri_sicil_no" in types
+    assert "bagkur_no" in types

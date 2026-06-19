@@ -349,7 +349,7 @@ def _valid_ein_us(s: str) -> bool:
     return s[:2] not in _EIN_INVALID_PREFIXES
 
 
-# ── TR SGK detector ───────────────────────────────────────────────────────────
+# ── TR SGK detectors ─────────────────────────────────────────────────────────
 
 # SGK Sicil Numarası — label-prefixed 10-11 digit number
 SGK_NO_RE = re.compile(
@@ -357,6 +357,31 @@ SGK_NO_RE = re.compile(
     r"Sigortal[ıi]\s*(?:Sicil\s*)?(?:No|Numara(?:s[ıi])?)|SSK\s*(?:No|Numara(?:s[ıi])?|Sicil))"
     r"\s*[:#]*\s*(\d{10,11})\b",
     re.IGNORECASE | re.UNICODE,
+)
+
+# Emeklilik sicil numarası — retirement social security registration; label-prefixed, 9-11 digits
+EMEKLILIK_NO_RE = re.compile(
+    r"(?:Emekli(?:lik)?\s*(?:Sicil\s*)?(?:No(?:su)?|Numara(?:s[ıi])?)|"
+    r"E\s*Sicil|Emekli\s*Maaş[ıi]\s*No(?:su)?)"
+    r"\s*[:#]*\s*(\d{9,11})\b",
+    re.UNICODE,
+)
+
+# İşyeri SGK sicil kodu — workplace SGK registration code; label-prefixed, 8-9 digits
+ISYERI_SICIL_NO_RE = re.compile(
+    r"(?:İşyeri\s*(?:SGK\s*)?(?:Sicil\s*)?(?:Kodu?|No(?:su)?|Numara(?:s[ıi])?)|"
+    r"İşyeri\s*Tescil\s*No(?:su)?|SGK\s*İşyeri\s*Kodu?)"
+    r"\s*[:#]*\s*(\d{8,9})\b",
+    re.UNICODE,
+)
+
+# Bağkur (4/b) sicil numarası — self-employed social security; label-prefixed, 10-11 digits
+BAGKUR_NO_RE = re.compile(
+    r"(?:Bağ[-\s]?[Kk]ur\s*(?:Sicil\s*)?(?:No(?:su)?|Numara(?:s[ıi])?)|"
+    r"4\s*/\s*b\s*(?:Sicil\s*)?No(?:su)?|"
+    r"Kendi\s*Nam[ıi]na\s*(?:Çalışan\s*)?SGK\s*No(?:su)?)"
+    r"\s*[:#]*\s*(\d{10,11})\b",
+    re.UNICODE,
 )
 
 # ── PL detectors ──────────────────────────────────────────────────────────────
@@ -451,7 +476,8 @@ def _valid_nrrniss_be(s: str) -> bool:
 _LOCALE_DETECTORS: dict[str, set[str]] = {
     "tr": {
         "national_id_tr", "tax_id_tr", "phone_tr", "name",
-        "iban_tr", "company_name_tr", "mersis_no", "postal_code_tr", "province_tr", "sgk_no",
+        "iban_tr", "company_name_tr", "mersis_no", "postal_code_tr", "province_tr",
+        "sgk_no", "emeklilik_no", "isyeri_sicil_no", "bagkur_no",
     },
     "us": {"ssn", "tax_id_us", "national_id_us", "phone_intl", "company_name_intl"},
     "eu": {"phone_intl", "iban_intl", "company_name_intl"},
@@ -494,7 +520,8 @@ def detect_pii(text: str, locale: str = "und") -> list[dict]:
         "und" — All detectors combined (default; use when language is unknown)
         "all" — Alias for "und"
         "tr"  — Turkish: TCKN, VKN, phone_tr, name, iban_tr, company_name_tr,
-                mersis_no, postal_code_tr, province_tr, sgk_no
+                mersis_no, postal_code_tr, province_tr, sgk_no,
+                emeklilik_no, isyeri_sicil_no, bagkur_no
         "us"  — US: SSN, EIN, ITIN, phone_intl, company_name_intl
         "eu"  — EU: phone_intl, iban_intl, company_name_intl
         "de"  — German: tax_id_de, social_id_de, social_id_at
@@ -575,6 +602,18 @@ def detect_pii(text: str, locale: str = "und") -> list[dict]:
     if "sgk_no" in active:
         for m in SGK_NO_RE.finditer(t):
             findings.append({"type": "sgk_no", "value": m.group(1), "start": m.start(1), "end": m.end(1)})
+
+    if "emeklilik_no" in active:
+        for m in EMEKLILIK_NO_RE.finditer(t):
+            findings.append({"type": "emeklilik_no", "value": m.group(1), "start": m.start(1), "end": m.end(1)})
+
+    if "isyeri_sicil_no" in active:
+        for m in ISYERI_SICIL_NO_RE.finditer(t):
+            findings.append({"type": "isyeri_sicil_no", "value": m.group(1), "start": m.start(1), "end": m.end(1)})
+
+    if "bagkur_no" in active:
+        for m in BAGKUR_NO_RE.finditer(t):
+            findings.append({"type": "bagkur_no", "value": m.group(1), "start": m.start(1), "end": m.end(1)})
 
     if "mersis_no" in active:
         for m in MERSIS_RE.finditer(t):

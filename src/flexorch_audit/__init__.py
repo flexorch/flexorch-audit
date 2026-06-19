@@ -32,7 +32,7 @@ from ._quality import quality_metrics
 from ._noise import noise_metrics, noise_ratio as _noise_ratio
 from ._mask import apply_mask
 
-__version__ = "0.8.2"
+__version__ = "0.9.0"
 __all__ = ["audit", "audit_batch", "audit_stream", "mask", "redact_for_llm", "estimate_tokens", "compliance_report", "AuditResult", "__version__"]
 
 
